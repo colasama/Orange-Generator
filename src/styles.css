@@ -523,6 +523,7 @@ input:focus-visible {
 }
 
 .canvas-column {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -695,38 +696,52 @@ input:focus-visible {
 }
 
 .fill-color-picker {
-  display: flex;
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 44px;
   align-items: center;
-  gap: 10px;
-  color: var(--ink-soft);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.fill-color-picker input[type="color"] {
-  width: 52px;
-  height: 38px;
-  padding: 3px;
-  background: var(--paper);
-  border: 0;
-  border-radius: 10px;
-  box-shadow: inset 0 0 0 2px rgb(200 112 0 / 28%);
+  justify-items: center;
+  overflow: hidden;
+  background: var(--fill-color);
+  border: 2px solid rgb(200 112 0 / 24%);
+  border-radius: 11px;
   cursor: pointer;
 }
 
-.fill-color-picker input[type="color"]::-webkit-color-swatch-wrapper {
+.fill-color-picker input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   padding: 0;
+  opacity: 0;
+  border: 0;
+  cursor: pointer;
 }
 
-.fill-color-picker input[type="color"]::-webkit-color-swatch,
-.fill-color-picker input[type="color"]::-moz-color-swatch {
-  border: 0;
-  border-radius: 7px;
+.fill-color-picker:focus-within {
+  outline: 3px solid rgb(46 189 248 / 48%);
+  outline-offset: 2px;
+}
+
+.fill-color-picker-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: var(--ink);
+  font-size: 16px;
+  background: rgb(255 255 255 / 88%);
+  border-radius: 9px;
+  pointer-events: none;
 }
 
 .fill-color-presets {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 240px);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  justify-self: center;
   gap: 6px;
 }
 
@@ -1533,20 +1548,21 @@ input:focus-visible {
   }
 
   .fill-color-picker input[type="color"] {
-    width: 46px;
-    height: 32px;
+    width: 100%;
+    height: 100%;
   }
 
   .fill-color-presets {
-    grid-template-columns: repeat(3, 42px);
+    width: min(100%, 230px);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     justify-content: center;
-    gap: 7px;
+    gap: 6px;
   }
 
   .fill-color-presets button {
-    width: 42px;
-    height: 42px;
-    aspect-ratio: auto;
+    width: auto;
+    height: auto;
+    aspect-ratio: 1;
   }
 
   .effect-panel {
@@ -1820,8 +1836,11 @@ input:focus-visible {
     right: auto;
     z-index: 1;
     width: auto;
+    max-height: none;
     margin-top: 10px;
     padding: 12px !important;
+    overflow: visible !important;
+    overscroll-behavior: auto;
     border-width: 2px !important;
     border-radius: 17px !important;
     box-shadow: 0 4px 0 rgb(23 54 93 / 16%) !important;

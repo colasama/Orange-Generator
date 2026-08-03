@@ -151,16 +151,15 @@ export function StickerNode({
     sticker.contrast !== 0 ||
     sticker.warmth !== 0;
   const compactControls = displayScale * Math.min(canvasWidth, canvasHeight) < 420;
-  const compactControlRadius = Math.min(canvasWidth, canvasHeight) * 0.019;
-  // Mobile controls scale with the displayed canvas; desktop controls keep a
-  // stable on-screen size. This avoids both oversized and tiny phone handles.
-  const controlRadius = compactControls ? compactControlRadius : 11 / displayScale;
-  const controlStrokeWidth = compactControls
-    ? compactControlRadius * 0.18
-    : 2 / displayScale;
-  const rotateControlOffset = compactControls
-    ? compactControlRadius * 2.8
-    : 38 / displayScale;
+  // Konva.Transformer ignores its parent's scale, so its sizes are already in
+  // screen pixels. The custom badges are regular canvas nodes and need the
+  // inverse conversion to render at those same pixel sizes.
+  const controlRadiusPx = compactControls ? 7 : 11;
+  const controlStrokeWidthPx = compactControls ? 1.5 : 2;
+  const rotateControlOffsetPx = compactControls ? 22 : 38;
+  const controlRadius = controlRadiusPx / displayScale;
+  const controlStrokeWidth = controlStrokeWidthPx / displayScale;
+  const rotateControlOffset = rotateControlOffsetPx / displayScale;
   const rotateIconSize = controlRadius * 2.2;
   const resizeIconSize = controlRadius * 2.1;
 
@@ -437,10 +436,10 @@ export function StickerNode({
           borderDash={compactControls ? [7, 5] : [9, 6]}
           anchorFill="#fffdf8"
           anchorStroke="#178ec4"
-          anchorStrokeWidth={controlStrokeWidth}
-          anchorSize={controlRadius * 2}
+          anchorStrokeWidth={controlStrokeWidthPx}
+          anchorSize={controlRadiusPx * 2}
           anchorCornerRadius={99}
-          rotateAnchorOffset={rotateControlOffset}
+          rotateAnchorOffset={rotateControlOffsetPx}
           boundBoxFunc={(oldBox, nextBox) => {
             if (
               Math.abs(nextBox.width) < minimumSize ||

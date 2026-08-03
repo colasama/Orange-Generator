@@ -23,6 +23,7 @@ import {
   DownloadSimple,
   ImageSquare,
   Info,
+  PencilSimple,
   SlidersHorizontal,
   ShareNetwork,
   Trash,
@@ -466,7 +467,7 @@ const FILL_COLOR_PRESETS = [
     kind: 'variant',
     label: '彩色二',
     src: '/assets/stickers/orange-lettering-2.svg',
-    swatch: 'linear-gradient(135deg, #096BC1 0 48%, #FFC639 48% 82%, #4AB2F3 82%)',
+    swatch: 'conic-gradient(from 45deg, #FFA011 0 25%, #096BC1 25% 50%, #FFFFFF 50% 75%, #4AB2F3 75%)',
   },
 ] as const;
 const COLOR_THROTTLE_MS = 120;
@@ -583,7 +584,13 @@ function FillColorControl({
         <span>填充颜色</span>
         <output>{sticker.variantSrc ? '彩色预设' : draftColor.toUpperCase()}</output>
       </span>
-      <div className="fill-color-picker">
+      <div
+        className="fill-color-picker"
+        style={{ '--fill-color': draftColor } as React.CSSProperties}
+      >
+        <span className="fill-color-picker-icon" aria-hidden="true">
+          <PencilSimple size="1em" weight="bold" />
+        </span>
         <input
           type="color"
           value={draftColor}
@@ -1322,16 +1329,6 @@ export function StickerEditor() {
               </div>
             </div>
 
-            {selectedSticker && (
-              <StickerInspector
-                sticker={selectedSticker}
-                onUpdate={(patch) => updateSticker(selectedSticker.instanceId, patch)}
-                onDuplicate={duplicateSelected}
-                onDelete={deleteSelected}
-                onClose={() => setSelectedId(null)}
-              />
-            )}
-
             {isDraggingFile && (
               <div className="drop-feedback" aria-hidden="true">
                 <UploadSimple size={42} weight="bold" />
@@ -1340,6 +1337,15 @@ export function StickerEditor() {
             )}
           </div>
 
+          {selectedSticker && (
+            <StickerInspector
+              sticker={selectedSticker}
+              onUpdate={(patch) => updateSticker(selectedSticker.instanceId, patch)}
+              onDuplicate={duplicateSelected}
+              onDelete={deleteSelected}
+              onClose={() => setSelectedId(null)}
+            />
+          )}
         </div>
       </div>
 
