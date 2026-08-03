@@ -151,6 +151,18 @@ function canvasToPngBlob(canvas: HTMLCanvasElement) {
   });
 }
 
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('浏览器无法读取生成的 PNG 图片'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('浏览器无法读取生成的 PNG 图片'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function shouldUseMobileSaveFlow() {
   return (
     window.matchMedia('(hover: none) and (pointer: coarse)').matches ||
@@ -944,7 +956,7 @@ export function StickerEditor() {
 
   useEffect(() => {
     return () => {
-      if (exportedImage) URL.revokeObjectURL(exportedImage.url);
+      if (exportedImage?.url.startsWith('blob:')) URL.revokeObjectURL(exportedImage.url);
     };
   }, [exportedImage]);
 
@@ -1142,16 +1154,19 @@ export function StickerEditor() {
       const fileBase = background.name.replace(/\.[^.]+$/, '').replace(/[^\w\u4e00-\u9fa5-]+/g, '-');
       const fileName = `${fileBase || '安心院小姐的酸橙味照片'}-贴纸版.png`;
       const file = new File([blob], fileName, { type: 'image/png' });
-      const url = URL.createObjectURL(blob);
 
       if (shouldUseMobileSaveFlow()) {
+        // Mobile Safari and some in-app browsers can display a blob URL but
+        // save an empty/gray image from the long-press menu. A self-contained
+        // PNG data URL keeps the actual bytes available to that save flow.
         setExportedImage({
           file,
-          url,
+          url: await blobToDataUrl(blob),
         });
         return;
       }
 
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.download = fileName;
       link.href = url;
