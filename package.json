@@ -1,0 +1,33 @@
+{
+  "name": "orange-sticker-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "font:subset": "node scripts/subset-font.mjs",
+    "preview": "rsbuild preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "animal-island-ui": "^1.4.0",
+    "classnames": "^2.5.1",
+    "konva": "^10.3.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-konva": "^19.2.5"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.1.9",
+    "@rsbuild/plugin-react": "^2.1.0",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "fontkit": "^2.0.4",
+    "subset-font": "^2.5.0",
+    "typescript": "^7.0.2"
+  },
+  "packageManager": "pnpm@11.9.0"
+}
