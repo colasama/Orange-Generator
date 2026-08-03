@@ -380,6 +380,8 @@ export function StickerNode({
         alpha={fillRgb ? 1 : undefined}
         filters={hasActiveFilters ? (fillRgb ? COLOR_FILTERS : ADJUSTMENT_FILTERS) : undefined}
         draggable
+        dragDistance={compactControls ? 8 : undefined}
+        preventDefault={false}
         dragBoundFunc={(position) => ({
           x: Math.max(-sticker.width * 0.2, Math.min(canvasWidth + sticker.width * 0.2, position.x)),
           y: Math.max(-sticker.height * 0.2, Math.min(canvasHeight + sticker.height * 0.2, position.y)),

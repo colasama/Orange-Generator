@@ -1801,6 +1801,7 @@ input:focus-visible {
     border-width: 2px;
     border-radius: 13px;
     box-shadow: none;
+    touch-action: pan-y;
   }
 
   .empty-canvas {
