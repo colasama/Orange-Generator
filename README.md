@@ -1,4 +1,6 @@
-# 安心院小姐的酸橙味照片生成器（Orange Generator）
+# 酸橙味照片生成器
+
+> 目前还是默认的 README，还没来得及修改.jpg
 
 一个使用 React、Rsbuild、Konva 和 Animal Island UI 构建的纯前端图片贴纸编辑器。
 
@@ -39,8 +41,6 @@ pnpm font:subset --source /path/to/font.ttf
 - 本地处理图片，不上传到服务器
 
 ## 素材与许可
-
-占位 PNG 贴纸通过内置图像生成工具生成，源提示描述了 6 个蓝橙黄配色的扁平 3D 动漫贴纸，并要求独立排布、白色刀模边框及纯色色键背景。`spark.svg` 是用于验证 SVG 贴纸链路的项目内几何占位素材。
 
 页面字体使用用户提供的“乐米沐和圆体”。`src/assets/fonts/le-mi-mu-he-yuan-subset.*` 仅保留当前界面文案、数字、拉丁字符和常用符号，并按 WOFF2、WOFF、TTF 的顺序降级加载。新增界面文案后运行 `pnpm font:subset` 即可同步更新字体子集；未收录字符会回退到系统字体。先前的字体子集仍保留在源码中，方便随时切回，但不会进入当前生产构建。
 
