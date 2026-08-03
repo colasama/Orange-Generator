@@ -62,6 +62,12 @@ interface ExportedImage {
   url: string;
 }
 
+type ExportState =
+  | { status: 'idle' }
+  | { status: 'generating' }
+  | { status: 'ready'; image: ExportedImage }
+  | { status: 'error'; message: string };
+
 function CanvasButtonLabel({ text }: { text: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -379,6 +385,7 @@ function AdjustmentSlider({
 
 const EFFECT_SLIDER_THROTTLE_MS = 96;
 const EFFECT_SLIDER_DEBOUNCE_MS = 180;
+const MIN_GENERATING_DISPLAY_MS = 600;
 
 function ThrottledAdjustmentSlider({
   value,
@@ -914,9 +921,8 @@ export function StickerEditor() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
-  const [exportedImage, setExportedImage] = useState<ExportedImage | null>(null);
+  const [exportState, setExportState] = useState<ExportState>({ status: 'idle' });
   const [toast, setToast] = useState<ToastState | null>(null);
   const history = useStickerHistory();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -955,16 +961,12 @@ export function StickerEditor() {
   }, [background]);
 
   useEffect(() => {
-    return () => {
-      if (exportedImage?.url.startsWith('blob:')) URL.revokeObjectURL(exportedImage.url);
-    };
-  }, [exportedImage]);
-
-  useEffect(() => {
-    if (!exportedImage) return;
+    if (exportState.status === 'idle') return;
     const previousOverflow = document.body.style.overflow;
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setExportedImage(null);
+      if (event.key === 'Escape' && exportState.status !== 'generating') {
+        setExportState({ status: 'idle' });
+      }
     };
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', handleEscape);
@@ -972,7 +974,7 @@ export function StickerEditor() {
       document.body.style.overflow = previousOverflow;
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [exportedImage]);
+  }, [exportState.status]);
 
   const handleFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -1088,6 +1090,7 @@ export function StickerEditor() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (exportState.status !== 'idle') return;
       const target = event.target as HTMLElement | null;
       if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
 
@@ -1106,7 +1109,7 @@ export function StickerEditor() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [deleteSelected, history, selectedId]);
+  }, [deleteSelected, exportState.status, history, selectedId]);
 
   const clearEverything = () => {
     history.reset();
@@ -1117,12 +1120,14 @@ export function StickerEditor() {
   };
 
   const saveImage = async () => {
+    if (exportState.status === 'generating') return;
     if (!background || !stageRef.current) {
       showToast('warning', '请先上传图片再保存', undefined, 2400);
       return;
     }
 
-    setIsSaving(true);
+    const generationStartedAt = performance.now();
+    setExportState({ status: 'generating' });
     const previousSelection = selectedId;
     setSelectedId(null);
 
@@ -1154,15 +1159,21 @@ export function StickerEditor() {
       const fileBase = background.name.replace(/\.[^.]+$/, '').replace(/[^\w\u4e00-\u9fa5-]+/g, '-');
       const fileName = `${fileBase || '安心院小姐的酸橙味照片'}-贴纸版.png`;
       const file = new File([blob], fileName, { type: 'image/png' });
+      const previewUrl = await blobToDataUrl(blob);
+      const remainingDisplayTime = MIN_GENERATING_DISPLAY_MS - (
+        performance.now() - generationStartedAt
+      );
+      if (remainingDisplayTime > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, remainingDisplayTime);
+        });
+      }
 
       if (shouldUseMobileSaveFlow()) {
         // Mobile Safari and some in-app browsers can display a blob URL but
         // save an empty/gray image from the long-press menu. A self-contained
         // PNG data URL keeps the actual bytes available to that save flow.
-        setExportedImage({
-          file,
-          url: await blobToDataUrl(blob),
-        });
+        setExportState({ status: 'ready', image: { file, url: previewUrl } });
         return;
       }
 
@@ -1174,15 +1185,22 @@ export function StickerEditor() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportState({ status: 'ready', image: { file, url: previewUrl } });
       showToast('success', '已开始下载', '正在导出原图尺寸的 PNG', 2500);
-    } catch {
-      showToast('error', '保存失败', '请稍后重试，或换一张尺寸更小的图片', 3800);
+    } catch (error) {
+      setExportState({
+        status: 'error',
+        message: error instanceof Error
+          ? error.message
+          : '请稍后重试，或换一张尺寸更小的图片',
+      });
     } finally {
       setSelectedId(previousSelection);
-      setIsSaving(false);
     }
   };
 
+  const exportedImage = exportState.status === 'ready' ? exportState.image : null;
+  const isSaving = exportState.status === 'generating';
   const canShareExportedImage = Boolean(
     exportedImage && canShareFile(exportedImage.file),
   );
@@ -1195,7 +1213,7 @@ export function StickerEditor() {
         files: [exportedImage.file],
         title: '保存图片',
       });
-      setExportedImage(null);
+      setExportState({ status: 'idle' });
       showToast('success', '图片已交给系统处理', '可在分享面板中保存到相册或文件', 2800);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
@@ -1204,6 +1222,18 @@ export function StickerEditor() {
     } finally {
       setIsSharing(false);
     }
+  };
+
+  const downloadExportedImage = () => {
+    if (!exportedImage) return;
+    const url = URL.createObjectURL(exportedImage.file);
+    const link = document.createElement('a');
+    link.download = exportedImage.file.name;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const hasContent = Boolean(background || history.stickers.length);
@@ -1414,44 +1444,100 @@ export function StickerEditor() {
         上传的图片和所有贴纸都会从当前画布移除。已下载的图片不会受到影响。
       </Modal>
 
-      {exportedImage &&
+      {exportState.status !== 'idle' &&
         createPortal(
           <div
             className="save-preview-mask"
             onClick={(event) => {
-              if (event.target === event.currentTarget) setExportedImage(null);
+              if (
+                exportState.status !== 'generating' &&
+                event.target === event.currentTarget
+              ) {
+                setExportState({ status: 'idle' });
+              }
             }}
           >
             <div
-              className="save-preview-dialog"
+              className={`save-preview-dialog is-export-${exportState.status}`}
               role="dialog"
               aria-modal="true"
-              aria-label="保存 PNG 图片"
+              aria-label={exportState.status === 'generating' ? '正在生成 PNG 图片' : '保存 PNG 图片'}
+              aria-busy={exportState.status === 'generating'}
             >
-              <div className="save-preview-image-wrap">
-                <img
-                  className="save-preview-image"
-                  src={exportedImage.url}
-                  alt="已生成的成品图片，可长按保存"
-                />
-              </div>
-              <p className="save-preview-instructions">
-                长按图片保存<br />或者使用下面的按钮来保存
-              </p>
-              <div className="save-preview-actions">
-                {canShareExportedImage && (
-                  <Button
-                    className="share-save-button"
-                    type="primary"
-                    loading={isSharing}
-                    icon={<ShareNetwork size="1em" weight="bold" />}
-                    onClick={() => void shareExportedImage()}
-                    aria-label="保存到手机或分享"
-                  >
-                    <CanvasButtonLabel text="保存到手机 / 分享" />
-                  </Button>
-                )}
-              </div>
+              {exportState.status === 'generating' && (
+                <div className="export-generating" role="status" aria-live="polite">
+                  <img
+                    className="export-generating-mascot"
+                    src="/orange-angelina.svg"
+                    alt=""
+                  />
+                  <div className="export-generating-copy">
+                    <strong>正在生成图片…</strong>
+                    <span>图片尺寸较大时可能需要几秒</span>
+                  </div>
+                </div>
+              )}
+
+              {exportState.status === 'ready' && (
+                <>
+                  <div className="save-preview-image-wrap">
+                    <img
+                      className="save-preview-image"
+                      src={exportState.image.url}
+                      alt="已生成的成品图片，可长按保存"
+                    />
+                  </div>
+                  <p className="save-preview-instructions">
+                    图片已经生成<br />可以长按图片保存，或使用下面的按钮
+                  </p>
+                  <div className="save-preview-actions">
+                    {canShareExportedImage && (
+                      <Button
+                        className="share-save-button"
+                        type="primary"
+                        loading={isSharing}
+                        icon={<ShareNetwork size="1em" weight="bold" />}
+                        onClick={() => void shareExportedImage()}
+                        aria-label="保存到手机或分享"
+                      >
+                        <CanvasButtonLabel text="保存到手机 / 分享" />
+                      </Button>
+                    )}
+                    <Button
+                      icon={<DownloadSimple size="1em" weight="bold" />}
+                      onClick={downloadExportedImage}
+                    >
+                      下载图片
+                    </Button>
+                    <Button onClick={() => setExportState({ status: 'idle' })}>
+                      完成
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {exportState.status === 'error' && (
+                <div className="export-error" role="alert">
+                  <WarningCircle size="2.6em" weight="fill" aria-hidden="true" />
+                  <strong>图片生成失败</strong>
+                  <p>{exportState.message}</p>
+                  <div className="save-preview-actions">
+                    <Button
+                      className="share-save-button"
+                      type="primary"
+                      icon={<ArrowClockwise size="1em" weight="bold" />}
+                      onClick={() => void saveImage()}
+                    >
+                      重新生成
+                    </Button>
+                    <Button
+                      onClick={() => setExportState({ status: 'idle' })}
+                    >
+                      返回编辑
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>,
           document.body,
