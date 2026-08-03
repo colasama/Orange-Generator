@@ -1309,8 +1309,9 @@ input:focus-visible {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-top: 32px;
+  margin-top: 56px;
   padding: 22px 8px 2px;
+  border-top: 2px solid rgb(23 142 196 / 24%);
   color: var(--ink-soft);
   font-size: 16px;
   font-weight: 700;
