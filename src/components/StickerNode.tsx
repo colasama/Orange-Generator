@@ -385,10 +385,28 @@ export function StickerNode({
         draggable
         dragDistance={compactControls ? 8 : undefined}
         preventDefault={false}
-        dragBoundFunc={(position) => ({
-          x: Math.max(-sticker.width * 0.2, Math.min(canvasWidth + sticker.width * 0.2, position.x)),
-          y: Math.max(-sticker.height * 0.2, Math.min(canvasHeight + sticker.height * 0.2, position.y)),
-        })}
+        dragBoundFunc={(position) => {
+          // Konva provides and expects absolute (display-scaled) coordinates
+          // here, while sticker dimensions and canvas bounds use the original
+          // image coordinate system. Clamp in that logical coordinate system,
+          // then convert the result back so the node's local x/y stay suitable
+          // for full-resolution export.
+          const logicalX = position.x / displayScale;
+          const logicalY = position.y / displayScale;
+          const boundedX = Math.max(
+            -sticker.width * 0.2,
+            Math.min(canvasWidth + sticker.width * 0.2, logicalX),
+          );
+          const boundedY = Math.max(
+            -sticker.height * 0.2,
+            Math.min(canvasHeight + sticker.height * 0.2, logicalY),
+          );
+
+          return {
+            x: boundedX * displayScale,
+            y: boundedY * displayScale,
+          };
+        }}
         onClick={onSelect}
         onTap={onSelect}
         onDragStart={onSelect}
