@@ -21,6 +21,8 @@ import {
   CheckCircle,
   Copy,
   DownloadSimple,
+  FlipHorizontal,
+  FlipVertical,
   ImageSquare,
   Info,
   PencilSimple,
@@ -702,6 +704,29 @@ function StickerInspector({
       </div>
 
       <div className="adjustment-stack">
+        <div className="transform-control">
+          <span className="adjustment-label">翻转</span>
+          <div className="transform-actions" aria-label="贴纸翻转">
+            <Button
+              className={sticker.flipX ? 'is-active' : undefined}
+              size="small"
+              icon={<FlipHorizontal size="1em" weight="bold" />}
+              aria-pressed={sticker.flipX}
+              onClick={() => onUpdate({ flipX: !sticker.flipX })}
+            >
+              水平翻转
+            </Button>
+            <Button
+              className={sticker.flipY ? 'is-active' : undefined}
+              size="small"
+              icon={<FlipVertical size="1em" weight="bold" />}
+              aria-pressed={sticker.flipY}
+              onClick={() => onUpdate({ flipY: !sticker.flipY })}
+            >
+              垂直翻转
+            </Button>
+          </div>
+        </div>
         {sticker.defaultFillColor && (
           <FillColorControl
             sticker={sticker}
@@ -1048,6 +1073,8 @@ export function StickerEditor() {
         width,
         height,
         rotation: (offsetIndex - 2) * 3,
+        flipX: false,
+        flipY: false,
         hue: 0,
         saturation: 0,
         brightness: 0,

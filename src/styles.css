@@ -690,6 +690,38 @@ input:focus-visible {
   gap: 5px;
 }
 
+.transform-control {
+  display: grid;
+  gap: 7px;
+}
+
+.transform-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.transform-actions button {
+  min-width: 0;
+  padding-inline: 8px !important;
+  color: var(--ink) !important;
+  background: rgb(255 255 255 / 74%) !important;
+  border-color: rgb(23 142 196 / 32%) !important;
+  box-shadow: 0 3px 0 rgb(23 142 196 / 18%) !important;
+  font-size: 14px !important;
+}
+
+.transform-actions button.is-active {
+  color: #fff !important;
+  background: var(--sky) !important;
+  border-color: var(--sky-deep) !important;
+  box-shadow: 0 3px 0 var(--sky-deep) !important;
+}
+
+.transform-actions button.is-active svg {
+  color: #fff !important;
+}
+
 .fill-color-control {
   display: grid;
   gap: 7px;
@@ -1917,8 +1949,13 @@ input:focus-visible {
   }
 
   .fill-color-control,
+  .transform-control,
   .effect-panel {
     grid-column: 1 / -1;
+  }
+
+  .transform-actions button {
+    min-height: 40px;
   }
 
   .effect-panel {
