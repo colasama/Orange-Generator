@@ -18,16 +18,20 @@ import {
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
+  BoundingBox,
   CheckCircle,
+  Circle,
   Copy,
   DownloadSimple,
   FlipHorizontal,
   FlipVertical,
   ImageSquare,
   Info,
+  Palette,
   PencilSimple,
   SlidersHorizontal,
   ShareNetwork,
+  StackSimple,
   Trash,
   UploadSimple,
   WarningCircle,
@@ -56,6 +60,7 @@ const FIRST_RECOLORABLE_STICKER_ID = STICKER_ASSETS.find(
 
 type StickerUpdater = (stickers: PlacedSticker[]) => PlacedSticker[];
 type ToastKind = 'success' | 'info' | 'warning' | 'error';
+type MobileAdjustmentSection = 'color' | 'transform' | 'outline' | 'shadow';
 
 interface ToastState {
   kind: ToastKind;
@@ -180,6 +185,28 @@ function shouldUseMobileSaveFlow() {
     window.matchMedia('(hover: none) and (pointer: coarse)').matches ||
     window.innerWidth <= 767
   );
+}
+
+function useMobileLayout() {
+  const [isMobileLayout, setIsMobileLayout] = useState(
+    () => window.matchMedia('(max-width: 767px)').matches,
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const updateLayout = () => setIsMobileLayout(mediaQuery.matches);
+
+    updateLayout();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateLayout);
+      return () => mediaQuery.removeEventListener('change', updateLayout);
+    }
+
+    mediaQuery.addListener(updateLayout);
+    return () => mediaQuery.removeListener(updateLayout);
+  }, []);
+
+  return isMobileLayout;
 }
 
 function canShareFile(file: File) {
@@ -605,53 +632,58 @@ function FillColorControl({
 
   return (
     <div className="fill-color-control">
-      <span className="adjustment-label">
-        <span>填充颜色</span>
-        <output>{sticker.variantSrc ? '彩色预设' : draftColor.toUpperCase()}</output>
-      </span>
-      <div
-        className="fill-color-picker"
-        style={{ '--fill-color': draftColor } as React.CSSProperties}
-      >
-        <span className="fill-color-picker-icon" aria-hidden="true">
-          <PencilSimple size="1em" weight="bold" />
+      <div className="fill-color-custom">
+        <span className="adjustment-label">
+          <span>填充颜色</span>
+          <output>{sticker.variantSrc ? '彩色预设' : draftColor.toUpperCase()}</output>
         </span>
-        <input
-          type="color"
-          value={draftColor}
-          onChange={(event) => queueColorChange(event.target.value)}
-          onBlur={finishColorChange}
-          aria-label={`${sticker.name}填充颜色`}
-        />
+        <div
+          className="fill-color-picker"
+          style={{ '--fill-color': draftColor } as React.CSSProperties}
+        >
+          <span className="fill-color-picker-icon" aria-hidden="true">
+            <PencilSimple size="1em" weight="bold" />
+          </span>
+          <input
+            type="color"
+            value={draftColor}
+            onChange={(event) => queueColorChange(event.target.value)}
+            onBlur={finishColorChange}
+            aria-label={`${sticker.name}填充颜色`}
+          />
+        </div>
       </div>
-      <div className="fill-color-presets" aria-label="预设填充颜色">
-        {FILL_COLOR_PRESETS.map((preset) => (
-          <button
-            type="button"
-            key={preset.kind === 'solid' ? preset.value : preset.src}
-            className={`${preset.kind === 'variant' ? 'is-variant' : 'is-solid'}${
-              preset.kind === 'solid'
-                ? !sticker.variantSrc && draftColor.toUpperCase() === preset.value
-                  ? ' is-active'
-                  : ''
-                : sticker.variantSrc === preset.src
-                  ? ' is-active'
-                  : ''
-            }`}
-            style={{ '--preset-color': preset.swatch } as React.CSSProperties}
-            onClick={() => (
-              preset.kind === 'solid' ? applyPreset(preset.value) : applyVariant(preset.src)
-            )}
-            aria-label={`使用${preset.label}`}
-            aria-pressed={
-              preset.kind === 'solid'
-                ? !sticker.variantSrc && draftColor.toUpperCase() === preset.value
-                : sticker.variantSrc === preset.src
-            }
-          >
-            <span className="fill-color-preset-swatch" aria-hidden="true" />
-          </button>
-        ))}
+      <div className="fill-color-preset-group">
+        <span className="fill-color-preset-label">预设颜色</span>
+        <div className="fill-color-presets" aria-label="预设颜色">
+          {FILL_COLOR_PRESETS.map((preset) => (
+            <button
+              type="button"
+              key={preset.kind === 'solid' ? preset.value : preset.src}
+              className={`${preset.kind === 'variant' ? 'is-variant' : 'is-solid'}${
+                preset.kind === 'solid'
+                  ? !sticker.variantSrc && draftColor.toUpperCase() === preset.value
+                    ? ' is-active'
+                    : ''
+                  : sticker.variantSrc === preset.src
+                    ? ' is-active'
+                    : ''
+              }`}
+              style={{ '--preset-color': preset.swatch } as React.CSSProperties}
+              onClick={() => (
+                preset.kind === 'solid' ? applyPreset(preset.value) : applyVariant(preset.src)
+              )}
+              aria-label={`使用${preset.label}`}
+              aria-pressed={
+                preset.kind === 'solid'
+                  ? !sticker.variantSrc && draftColor.toUpperCase() === preset.value
+                  : sticker.variantSrc === preset.src
+              }
+            >
+              <span className="fill-color-preset-swatch" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -896,6 +928,338 @@ function StickerInspector({
   );
 }
 
+interface MobileStickerControlsProps {
+  sticker: PlacedSticker;
+  onUpdate: (patch: Partial<PlacedSticker>) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}
+
+const MOBILE_ADJUSTMENT_LABELS: Record<MobileAdjustmentSection, string> = {
+  color: '颜色',
+  transform: '变换',
+  outline: '白边',
+  shadow: '阴影',
+};
+
+function MobileStickerControls({
+  sticker,
+  onUpdate,
+  onDuplicate,
+  onDelete,
+  onClose,
+}: MobileStickerControlsProps) {
+  const [activeSection, setActiveSection] = useState<MobileAdjustmentSection | null>(null);
+  const closeSheetButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!activeSection) return;
+
+    const handleSheetKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveSection(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleSheetKeyDown, true);
+    const focusFrame = window.requestAnimationFrame(() => closeSheetButtonRef.current?.focus());
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleSheetKeyDown, true);
+    };
+  }, [activeSection]);
+
+  const resetColor = () => onUpdate({
+    hue: 0,
+    saturation: 0,
+    brightness: 0,
+    contrast: 0,
+    warmth: 0,
+    fillColor: sticker.defaultFillColor,
+    variantSrc: undefined,
+  });
+
+  const renderSheetControls = () => {
+    switch (activeSection) {
+      case 'color':
+        return (
+          <div className="mobile-sheet-control-stack">
+            {sticker.defaultFillColor && (
+              <FillColorControl sticker={sticker} onChange={onUpdate} />
+            )}
+            <div className="mobile-color-sliders">
+              <AdjustmentSlider
+                label="色相"
+                value={sticker.hue}
+                min={-180}
+                max={180}
+                suffix="°"
+                onChange={(hue) => onUpdate({ hue })}
+              />
+              <AdjustmentSlider
+                label="饱和度"
+                value={sticker.saturation}
+                onChange={(saturation) => onUpdate({ saturation })}
+              />
+              <AdjustmentSlider
+                label="明度"
+                value={sticker.brightness}
+                onChange={(brightness) => onUpdate({ brightness })}
+              />
+              <AdjustmentSlider
+                label="对比度"
+                value={sticker.contrast}
+                onChange={(contrast) => onUpdate({ contrast })}
+              />
+              <AdjustmentSlider
+                label="白平衡"
+                value={sticker.warmth}
+                onChange={(warmth) => onUpdate({ warmth })}
+              />
+              <Button
+                className="mobile-sheet-reset"
+                size="small"
+                icon={<ArrowCounterClockwise size="1em" weight="bold" />}
+                onClick={resetColor}
+              >
+                重置颜色
+              </Button>
+            </div>
+          </div>
+        );
+      case 'transform':
+        return (
+          <div className="mobile-sheet-control-stack">
+            <div className="transform-control">
+              <span className="adjustment-label">翻转方向</span>
+              <div className="transform-actions" aria-label="贴纸翻转">
+                <Button
+                  className={sticker.flipX ? 'is-active' : undefined}
+                  size="small"
+                  icon={<FlipHorizontal size="1em" weight="bold" />}
+                  aria-pressed={sticker.flipX}
+                  onClick={() => onUpdate({ flipX: !sticker.flipX })}
+                >
+                  水平翻转
+                </Button>
+                <Button
+                  className={sticker.flipY ? 'is-active' : undefined}
+                  size="small"
+                  icon={<FlipVertical size="1em" weight="bold" />}
+                  aria-pressed={sticker.flipY}
+                  onClick={() => onUpdate({ flipY: !sticker.flipY })}
+                >
+                  垂直翻转
+                </Button>
+              </div>
+            </div>
+            <p className="mobile-transform-tip">
+              在画布中拖动可移动贴纸。使用右下角缩放，顶部控制点旋转。
+            </p>
+          </div>
+        );
+      case 'outline':
+        return (
+          <div className="mobile-sheet-control-stack">
+            <EffectToggle
+              label="开启白边"
+              checked={sticker.outlineEnabled}
+              onChange={(outlineEnabled) => onUpdate({ outlineEnabled })}
+            />
+            {sticker.outlineEnabled ? (
+              <div className="effect-controls">
+                <label className="effect-color-control">
+                  <span>边缘颜色</span>
+                  <input
+                    type="color"
+                    value={sticker.outlineColor}
+                    onChange={(event) => onUpdate({ outlineColor: event.target.value })}
+                    aria-label="白边颜色"
+                  />
+                </label>
+                <ThrottledAdjustmentSlider
+                  label="白边宽度"
+                  value={sticker.outlineWidth}
+                  min={1}
+                  max={40}
+                  suffix="px"
+                  leftHint="细"
+                  rightHint="粗"
+                  onChange={(outlineWidth) => onUpdate({ outlineWidth })}
+                />
+              </div>
+            ) : (
+              <p className="mobile-effect-empty">开启后可以调整白边颜色和宽度。</p>
+            )}
+          </div>
+        );
+      case 'shadow':
+        return (
+          <div className="mobile-sheet-control-stack">
+            <EffectToggle
+              label="开启阴影"
+              checked={sticker.shadowEnabled}
+              onChange={(shadowEnabled) => onUpdate({ shadowEnabled })}
+            />
+            {sticker.shadowEnabled ? (
+              <div className="effect-controls mobile-shadow-controls">
+                <label className="effect-color-control">
+                  <span>阴影颜色</span>
+                  <input
+                    type="color"
+                    value={sticker.shadowColor}
+                    onChange={(event) => onUpdate({ shadowColor: event.target.value })}
+                    aria-label="阴影颜色"
+                  />
+                </label>
+                <ThrottledAdjustmentSlider
+                  label="阴影大小"
+                  value={sticker.shadowSize}
+                  min={50}
+                  max={150}
+                  suffix="%"
+                  leftHint="小"
+                  rightHint="大"
+                  onChange={(shadowSize) => onUpdate({ shadowSize })}
+                />
+                <ThrottledAdjustmentSlider
+                  label="模糊"
+                  value={sticker.shadowBlur}
+                  min={0}
+                  max={100}
+                  suffix="px"
+                  leftHint="清晰"
+                  rightHint="柔和"
+                  onChange={(shadowBlur) => onUpdate({ shadowBlur })}
+                />
+                <ThrottledAdjustmentSlider
+                  label="透明度"
+                  value={sticker.shadowOpacity}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                  leftHint="透明"
+                  rightHint="实"
+                  onChange={(shadowOpacity) => onUpdate({ shadowOpacity })}
+                />
+                <ThrottledAdjustmentSlider
+                  label="水平偏移"
+                  value={sticker.shadowOffsetX}
+                  min={-40}
+                  max={40}
+                  suffix="px"
+                  leftHint="左"
+                  rightHint="右"
+                  onChange={(shadowOffsetX) => onUpdate({ shadowOffsetX })}
+                />
+                <ThrottledAdjustmentSlider
+                  label="垂直偏移"
+                  value={sticker.shadowOffsetY}
+                  min={-40}
+                  max={40}
+                  suffix="px"
+                  leftHint="上"
+                  rightHint="下"
+                  onChange={(shadowOffsetY) => onUpdate({ shadowOffsetY })}
+                />
+              </div>
+            ) : (
+              <p className="mobile-effect-empty">开启后可以调整阴影颜色、大小和位置。</p>
+            )}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return createPortal(
+    <>
+      <aside className="mobile-sticker-dock" aria-label={`调整${sticker.name}`}>
+        <div className="mobile-sticker-dock-heading">
+          <span>
+            <strong>贴纸调整</strong>
+          </span>
+          <button type="button" onClick={onClose} aria-label="关闭贴纸调整">
+            <X size="1em" weight="bold" />
+          </button>
+        </div>
+        <div className="mobile-sticker-dock-actions">
+          <button type="button" onClick={() => setActiveSection('color')}>
+            <Palette size="1.35em" weight="duotone" aria-hidden="true" />
+            <span>颜色</span>
+          </button>
+          <button type="button" onClick={() => setActiveSection('transform')}>
+            <BoundingBox size="1.35em" weight="duotone" aria-hidden="true" />
+            <span>变换</span>
+          </button>
+          <button
+            type="button"
+            className={sticker.outlineEnabled ? 'is-enabled' : undefined}
+            onClick={() => setActiveSection('outline')}
+          >
+            <Circle size="1.35em" weight="duotone" aria-hidden="true" />
+            <span>白边</span>
+          </button>
+          <button
+            type="button"
+            className={sticker.shadowEnabled ? 'is-enabled' : undefined}
+            onClick={() => setActiveSection('shadow')}
+          >
+            <StackSimple size="1.35em" weight="duotone" aria-hidden="true" />
+            <span>阴影</span>
+          </button>
+          <span className="mobile-dock-divider" aria-hidden="true" />
+          <button type="button" onClick={onDuplicate}>
+            <Copy size="1.35em" weight="duotone" aria-hidden="true" />
+            <span>复制</span>
+          </button>
+          <button className="is-danger" type="button" onClick={onDelete}>
+            <Trash size="1.35em" weight="duotone" aria-hidden="true" />
+            <span>删除</span>
+          </button>
+        </div>
+      </aside>
+
+      {activeSection && (
+        <div className="mobile-adjustment-mask">
+          <section
+            className="mobile-adjustment-sheet"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="mobile-adjustment-title"
+          >
+            <header className="mobile-adjustment-sheet-heading">
+              <div>
+                <span>贴纸调整</span>
+                <strong id="mobile-adjustment-title">
+                  {MOBILE_ADJUSTMENT_LABELS[activeSection]}
+                </strong>
+              </div>
+              <button
+                ref={closeSheetButtonRef}
+                type="button"
+                onClick={() => setActiveSection(null)}
+                aria-label={`关闭${MOBILE_ADJUSTMENT_LABELS[activeSection]}调整`}
+              >
+                <X size="1em" weight="bold" />
+              </button>
+            </header>
+            <div className="mobile-adjustment-sheet-body">
+              {renderSheetControls()}
+            </div>
+          </section>
+        </div>
+      )}
+    </>,
+    document.body,
+  );
+}
+
 interface StickerLibraryProps {
   disabled: boolean;
   onAddSticker: (asset: StickerAsset) => void;
@@ -913,8 +1277,13 @@ function StickerLibrary({ disabled, onAddSticker }: StickerLibraryProps) {
             key={asset.id}
             disabled={disabled}
             onClick={() => onAddSticker(asset)}
-            aria-label={`添加${asset.name}，${asset.format} 格式`}
+            aria-label={`添加${asset.name}，${asset.format} 格式${asset.id === FIRST_RECOLORABLE_STICKER_ID ? '，支持换色' : ''}`}
           >
+            {asset.id === FIRST_RECOLORABLE_STICKER_ID && (
+              <span className="sticker-color-badge" aria-hidden="true">
+                可换色
+              </span>
+            )}
             <span className="sticker-thumbnail">
               <img src={asset.src} alt="" draggable="false" />
             </span>
@@ -962,6 +1331,7 @@ export function StickerEditor() {
   const [isSharing, setIsSharing] = useState(false);
   const [exportState, setExportState] = useState<ExportState>({ status: 'idle' });
   const [toast, setToast] = useState<ToastState | null>(null);
+  const isMobileLayout = useMobileLayout();
   const history = useStickerHistory();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -1103,7 +1473,7 @@ export function StickerEditor() {
         showToast(
           'info',
           window.matchMedia('(max-width: 767px)').matches
-            ? '可以在下面面板中修改配色哦！'
+            ? '点一下底部的「颜色」就能修改配色哦！'
             : '可以在调整面板中修改配色哦！',
           undefined,
           3200,
@@ -1438,8 +1808,19 @@ export function StickerEditor() {
             )}
           </div>
 
-          {selectedSticker && (
+          {selectedSticker && !isMobileLayout && (
             <StickerInspector
+              sticker={selectedSticker}
+              onUpdate={(patch) => updateSticker(selectedSticker.instanceId, patch)}
+              onDuplicate={duplicateSelected}
+              onDelete={deleteSelected}
+              onClose={() => setSelectedId(null)}
+            />
+          )}
+
+          {selectedSticker && isMobileLayout && !isClearModalOpen && exportState.status === 'idle' && (
+            <MobileStickerControls
+              key={selectedSticker.instanceId}
               sticker={selectedSticker}
               onUpdate={(patch) => updateSticker(selectedSticker.instanceId, patch)}
               onDuplicate={duplicateSelected}
