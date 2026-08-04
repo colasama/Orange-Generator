@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Konva from 'konva';
-import { Circle, Group, Image as KonvaImage, Text, Transformer } from 'react-konva';
+import { Circle, Group, Image as KonvaImage, Path, Transformer } from 'react-konva';
 import type { PlacedSticker } from '../types';
 import { useHtmlImage } from '../hooks/useHtmlImage';
 
@@ -110,6 +110,11 @@ const COLOR_FILTERS = [Konva.Filters.RGBA, ...ADJUSTMENT_FILTERS];
 const OUTLINE_FILTERS = [outlineFilter];
 const SHADOW_FILTERS = [Konva.Filters.RGBA, Konva.Filters.Blur];
 const MAX_OUTLINE_CACHE_PIXELS = 1_500_000;
+const ROTATE_ICON_PATH =
+  'M244,56v48a12,12,0,0,1-12,12H184a12,12,0,1,1,0-24H201.1l-19-17.38c-.13-.12-.26-.24-.38-.37A76,76,0,1,0,127,204h1a75.53,75.53,0,0,0,52.15-20.72,12,12,0,0,1,16.49,17.45A99.45,99.45,0,0,1,128,228h-1.37A100,100,0,1,1,198.51,57.06L220,76.72V56a12,12,0,0,1,24,0Z';
+const RESIZE_ICON_PATH = 'M64,64 192,192M64,112V64h48M144,192h48V144';
+const ROTATE_ICON_BOUNDS = { centerX: 136.02, centerY: 128.01, size: 215.97 };
+const RESIZE_ICON_BOUNDS = { centerX: 128, centerY: 128, size: 128 };
 
 function hexToRgb(color?: string) {
   const match = color?.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
@@ -136,6 +141,7 @@ export function StickerNode({
     usesVectorFill ? sticker.fillColor : undefined,
   );
   const imageRef = useRef<Konva.Image>(null);
+  const transformNodeRef = useRef<Konva.Group>(null);
   const shadowRef = useRef<Konva.Image>(null);
   const outlineRef = useRef<Konva.Image>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
@@ -161,18 +167,20 @@ export function StickerNode({
   const controlRadius = controlRadiusPx / displayScale;
   const controlStrokeWidth = controlStrokeWidthPx / displayScale;
   const rotateControlOffset = rotateControlOffsetPx / displayScale;
-  const rotateIconSize = controlRadius * 2.2;
-  const resizeIconSize = controlRadius * 2.1;
+  const rotateIconScale = (controlRadius * 1.3) / ROTATE_ICON_BOUNDS.size;
+  const resizeIconScale = (controlRadius * 1.1) / RESIZE_ICON_BOUNDS.size;
 
   const syncControlBadges = () => {
-    const node = imageRef.current;
+    const node = transformNodeRef.current;
     if (!node) return;
+    const visualScaleX = Math.abs(node.scaleX()) * (sticker.flipX ? -1 : 1);
+    const visualScaleY = Math.abs(node.scaleY()) * (sticker.flipY ? -1 : 1);
 
     const outlineNode = outlineRef.current;
     if (outlineNode) {
       outlineNode.position(node.position());
       outlineNode.rotation(node.rotation());
-      outlineNode.scale(node.scale());
+      outlineNode.scale({ x: visualScaleX, y: visualScaleY });
     }
 
     const shadowNode = shadowRef.current;
@@ -182,32 +190,32 @@ export function StickerNode({
         y: node.y() + sticker.shadowOffsetY,
       });
       shadowNode.rotation(node.rotation());
-      shadowNode.scale(node.scale());
+      shadowNode.scale({ x: visualScaleX, y: visualScaleY });
     }
 
     const radians = (node.rotation() * Math.PI) / 180;
     const cosine = Math.cos(radians);
     const sine = Math.sin(radians);
-    const positionAt = (localX: number, localY: number) => ({
-      x: node.x() + localX * cosine - localY * sine,
-      y: node.y() + localX * sine + localY * cosine,
-    });
+    const positionAt = (localX: number, localY: number) => {
+      const scaledX = localX * node.scaleX();
+      const scaledY = localY * node.scaleY();
+      return {
+        x: node.x() + scaledX * cosine - scaledY * sine,
+        y: node.y() + scaledX * sine + scaledY * cosine,
+      };
+    };
 
+    const scaleY = Math.max(0.0001, Math.abs(node.scaleY()));
     rotateBadgeRef.current?.position(
-      positionAt(0, -(node.height() * Math.abs(node.scaleY())) / 2 - rotateControlOffset),
+      positionAt(0, -node.height() / 2 - rotateControlOffset / scaleY),
     );
-    resizeBadgeRef.current?.position(
-      positionAt(
-        (node.width() * Math.abs(node.scaleX())) / 2,
-        (node.height() * Math.abs(node.scaleY())) / 2,
-      ),
-    );
+    resizeBadgeRef.current?.position(positionAt(node.width() / 2, node.height() / 2));
     node.getLayer()?.batchDraw();
   };
 
   useEffect(() => {
-    if (!selected || !imageRef.current || !transformerRef.current) return;
-    transformerRef.current.nodes([imageRef.current]);
+    if (!selected || !transformNodeRef.current || !transformerRef.current) return;
+    transformerRef.current.nodes([transformNodeRef.current]);
     transformerRef.current.getLayer()?.batchDraw();
     syncControlBadges();
   }, [
@@ -218,6 +226,8 @@ export function StickerNode({
     sticker.width,
     sticker.height,
     sticker.rotation,
+    sticker.flipX,
+    sticker.flipY,
     displayScale,
   ]);
 
@@ -343,6 +353,8 @@ export function StickerNode({
           offsetX={(sticker.width * shadowScale) / 2}
           offsetY={(sticker.height * shadowScale) / 2}
           rotation={sticker.rotation}
+          scaleX={sticker.flipX ? -1 : 1}
+          scaleY={sticker.flipY ? -1 : 1}
           filters={SHADOW_FILTERS}
           opacity={sticker.shadowOpacity / 100}
           listening={false}
@@ -359,29 +371,19 @@ export function StickerNode({
           offsetX={sticker.width / 2}
           offsetY={sticker.height / 2}
           rotation={sticker.rotation}
+          scaleX={sticker.flipX ? -1 : 1}
+          scaleY={sticker.flipY ? -1 : 1}
           filters={OUTLINE_FILTERS}
           listening={false}
         />
       )}
-      <KonvaImage
-        ref={imageRef}
-        image={image}
+      <Group
+        ref={transformNodeRef}
         x={sticker.x}
         y={sticker.y}
         width={sticker.width}
         height={sticker.height}
-        offsetX={sticker.width / 2}
-        offsetY={sticker.height / 2}
         rotation={sticker.rotation}
-        hue={(sticker.hue + 360) % 360}
-        saturation={sticker.saturation / 100}
-        brightness={sticker.brightness / 100}
-        contrast={sticker.contrast}
-        red={fillRgb?.red}
-        green={fillRgb?.green}
-        blue={fillRgb?.blue}
-        alpha={fillRgb ? 1 : undefined}
-        filters={hasActiveFilters ? (fillRgb ? COLOR_FILTERS : ADJUSTMENT_FILTERS) : undefined}
         draggable
         dragDistance={compactControls ? 8 : undefined}
         preventDefault={false}
@@ -411,23 +413,24 @@ export function StickerNode({
         onTap={onSelect}
         onDragStart={onSelect}
         onDragMove={syncControlBadges}
-        onDragEnd={(event) => {
+        onDragEnd={() => {
+          const node = transformNodeRef.current;
+          if (!node) return;
           onChange({
             ...sticker,
-            x: event.target.x(),
-            y: event.target.y(),
+            x: node.x(),
+            y: node.y(),
           });
         }}
         onTransformEnd={() => {
-          const node = imageRef.current;
+          const node = transformNodeRef.current;
           if (!node) return;
           const scaleX = Math.abs(node.scaleX());
           const scaleY = Math.abs(node.scaleY());
           const uniformScale = (scaleX + scaleY) / 2;
           const minimumScale = minimumSize / Math.min(node.width(), node.height());
           const nextScale = Math.max(uniformScale, minimumScale);
-          node.scaleX(1);
-          node.scaleY(1);
+          node.scale({ x: 1, y: 1 });
 
           onChange({
             ...sticker,
@@ -439,7 +442,27 @@ export function StickerNode({
           });
         }}
         onTransform={syncControlBadges}
-      />
+      >
+        <KonvaImage
+          ref={imageRef}
+          image={image}
+          width={sticker.width}
+          height={sticker.height}
+          offsetX={sticker.width / 2}
+          offsetY={sticker.height / 2}
+          scaleX={sticker.flipX ? -1 : 1}
+          scaleY={sticker.flipY ? -1 : 1}
+          hue={(sticker.hue + 360) % 360}
+          saturation={sticker.saturation / 100}
+          brightness={sticker.brightness / 100}
+          contrast={sticker.contrast}
+          red={fillRgb?.red}
+          green={fillRgb?.green}
+          blue={fillRgb?.blue}
+          alpha={fillRgb ? 1 : undefined}
+          filters={hasActiveFilters ? (fillRgb ? COLOR_FILTERS : ADJUSTMENT_FILTERS) : undefined}
+        />
+      </Group>
       {selected && (
         <Transformer
           ref={transformerRef}
@@ -483,18 +506,17 @@ export function StickerNode({
               stroke="#178ec4"
               strokeWidth={controlStrokeWidth}
             />
-            <Text
-              x={-controlRadius}
-              y={-controlRadius}
-              width={controlRadius * 2}
-              height={controlRadius * 2}
-              text="↻"
-              align="center"
-              verticalAlign="middle"
+            <Path
+              data={ROTATE_ICON_PATH}
               fill="#178ec4"
-              fontFamily="Arial, sans-serif"
-              fontStyle="bold"
-              fontSize={rotateIconSize}
+              stroke="#178ec4"
+              strokeWidth={8}
+              lineJoin="round"
+              offsetX={ROTATE_ICON_BOUNDS.centerX}
+              offsetY={ROTATE_ICON_BOUNDS.centerY}
+              scaleX={rotateIconScale}
+              scaleY={rotateIconScale}
+              listening={false}
             />
           </Group>
           <Group ref={resizeBadgeRef} listening={false}>
@@ -504,18 +526,17 @@ export function StickerNode({
               stroke="#178ec4"
               strokeWidth={controlStrokeWidth}
             />
-            <Text
-              x={-controlRadius}
-              y={-controlRadius}
-              width={controlRadius * 2}
-              height={controlRadius * 2}
-              text="↘"
-              align="center"
-              verticalAlign="middle"
-              fill="#178ec4"
-              fontFamily="Arial, sans-serif"
-              fontStyle="bold"
-              fontSize={resizeIconSize}
+            <Path
+              data={RESIZE_ICON_PATH}
+              stroke="#178ec4"
+              strokeWidth={22}
+              lineCap="round"
+              lineJoin="round"
+              offsetX={RESIZE_ICON_BOUNDS.centerX}
+              offsetY={RESIZE_ICON_BOUNDS.centerY}
+              scaleX={resizeIconScale}
+              scaleY={resizeIconScale}
+              listening={false}
             />
           </Group>
         </>
