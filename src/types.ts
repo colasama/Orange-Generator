@@ -16,6 +16,7 @@ export interface PlacedSticker extends StickerAsset {
   width: number;
   height: number;
   rotation: number;
+  hue: number;
   saturation: number;
   brightness: number;
   contrast: number;
