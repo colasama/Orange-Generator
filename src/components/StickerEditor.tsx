@@ -47,6 +47,10 @@ import { StickerNode } from './StickerNode';
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const RECOLOR_HINT_SESSION_KEY = 'orange-generator:recolor-hint-shown';
+const FIRST_RECOLORABLE_STICKER_ID = STICKER_ASSETS.find(
+  (asset) => asset.format === 'SVG' && asset.defaultFillColor,
+)?.id;
 
 type StickerUpdater = (stickers: PlacedSticker[]) => PlacedSticker[];
 type ToastKind = 'success' | 'info' | 'warning' | 'error';
@@ -1063,6 +1067,21 @@ export function StickerEditor() {
       };
       history.commit((current) => [...current, nextSticker]);
       setSelectedId(nextSticker.instanceId);
+
+      if (
+        asset.id === FIRST_RECOLORABLE_STICKER_ID &&
+        !window.sessionStorage.getItem(RECOLOR_HINT_SESSION_KEY)
+      ) {
+        window.sessionStorage.setItem(RECOLOR_HINT_SESSION_KEY, '1');
+        showToast(
+          'info',
+          window.matchMedia('(max-width: 767px)').matches
+            ? '可以在下面面板中修改配色哦！'
+            : '可以在调整面板中修改配色哦！',
+          undefined,
+          3200,
+        );
+      }
     },
     [background, canvasHeight, canvasWidth, history, showToast],
   );
