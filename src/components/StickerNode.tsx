@@ -146,6 +146,7 @@ export function StickerNode({
   const shadowScale = Math.max(0.5, Math.min(1.5, (sticker.shadowSize ?? 100) / 100));
   const hasActiveFilters =
     Boolean(fillRgb) ||
+    sticker.hue !== 0 ||
     sticker.saturation !== 0 ||
     sticker.brightness !== 0 ||
     sticker.contrast !== 0 ||
@@ -239,6 +240,7 @@ export function StickerNode({
     sticker.contrast,
     sticker.fillColor,
     sticker.height,
+    sticker.hue,
     sticker.saturation,
     sticker.warmth,
     sticker.width,
@@ -371,6 +373,7 @@ export function StickerNode({
         offsetX={sticker.width / 2}
         offsetY={sticker.height / 2}
         rotation={sticker.rotation}
+        hue={(sticker.hue + 360) % 360}
         saturation={sticker.saturation / 100}
         brightness={sticker.brightness / 100}
         contrast={sticker.contrast}

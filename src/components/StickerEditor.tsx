@@ -705,6 +705,14 @@ function StickerInspector({
           />
         )}
         <AdjustmentSlider
+          label="色相"
+          value={sticker.hue}
+          min={-180}
+          max={180}
+          suffix="°"
+          onChange={(hue) => onUpdate({ hue })}
+        />
+        <AdjustmentSlider
           label="饱和度"
           value={sticker.saturation}
           onChange={(saturation) => onUpdate({ saturation })}
@@ -833,6 +841,7 @@ function StickerInspector({
           size="small"
           icon={<ArrowCounterClockwise size="1em" weight="bold" />}
           onClick={() => onUpdate({
+            hue: 0,
             saturation: 0,
             brightness: 0,
             contrast: 0,
@@ -1035,6 +1044,7 @@ export function StickerEditor() {
         width,
         height,
         rotation: (offsetIndex - 2) * 3,
+        hue: 0,
         saturation: 0,
         brightness: 0,
         contrast: 0,
