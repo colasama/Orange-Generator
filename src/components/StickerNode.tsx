@@ -338,7 +338,9 @@ export function StickerNode({
 
   if (!image) return null;
 
-  const minimumSize = Math.max(4, Math.min(canvasWidth, canvasHeight) * 0.025);
+  const minimumLogicalSize = Math.max(4, Math.min(canvasWidth, canvasHeight) * 0.025);
+  // Transformer bound boxes use absolute, display-scaled coordinates.
+  const minimumDisplaySize = minimumLogicalSize * displayScale;
 
   return (
     <>
@@ -428,7 +430,7 @@ export function StickerNode({
           const scaleX = Math.abs(node.scaleX());
           const scaleY = Math.abs(node.scaleY());
           const uniformScale = (scaleX + scaleY) / 2;
-          const minimumScale = minimumSize / Math.min(node.width(), node.height());
+          const minimumScale = minimumLogicalSize / Math.min(node.width(), node.height());
           const nextScale = Math.max(uniformScale, minimumScale);
           node.scale({ x: 1, y: 1 });
 
@@ -488,8 +490,8 @@ export function StickerNode({
           rotateAnchorOffset={rotateControlOffsetPx}
           boundBoxFunc={(oldBox, nextBox) => {
             if (
-              Math.abs(nextBox.width) < minimumSize ||
-              Math.abs(nextBox.height) < minimumSize
+              Math.abs(nextBox.width) < minimumDisplaySize ||
+              Math.abs(nextBox.height) < minimumDisplaySize
             ) {
               return oldBox;
             }
