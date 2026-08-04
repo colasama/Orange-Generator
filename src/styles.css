@@ -501,6 +501,26 @@ input:focus-visible {
   opacity: 0.55;
 }
 
+.sticker-color-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 6px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--orange);
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 999px;
+  box-shadow: 0 2px 0 rgb(200 112 0 / 26%);
+  pointer-events: none;
+}
+
 .sticker-thumbnail {
   display: block;
   width: 100%;
@@ -636,6 +656,11 @@ input:focus-visible {
   animation: inspector-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.mobile-sticker-dock,
+.mobile-adjustment-mask {
+  display: none;
+}
+
 @keyframes inspector-in {
   from {
     opacity: 0;
@@ -725,6 +750,19 @@ input:focus-visible {
 .fill-color-control {
   display: grid;
   gap: 7px;
+}
+
+.fill-color-custom,
+.fill-color-preset-group {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.fill-color-preset-label {
+  display: none;
+  font-size: 16px;
+  font-weight: 900;
 }
 
 .fill-color-picker {
@@ -1927,31 +1965,7 @@ input:focus-visible {
   }
 
   .inspector-panel {
-    position: relative;
-    top: auto;
-    right: auto;
-    z-index: 1;
-    width: auto;
-    max-height: none;
-    margin-top: 10px;
-    padding: 12px !important;
-    overflow: visible !important;
-    overscroll-behavior: auto;
-    border-width: 2px !important;
-    border-radius: 17px !important;
-    box-shadow: 0 4px 0 rgb(23 54 93 / 16%) !important;
-  }
-
-  .adjustment-stack {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 14px;
-    row-gap: 12px;
-  }
-
-  .fill-color-control,
-  .transform-control,
-  .effect-panel {
-    grid-column: 1 / -1;
+    display: none !important;
   }
 
   .transform-actions button {
@@ -1981,21 +1995,307 @@ input:focus-visible {
     padding-inline: 4px;
   }
 
-  .inspector-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr) 42px;
-    align-items: stretch;
+  .mobile-sticker-dock {
+    position: fixed;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 50%;
+    z-index: 32;
+    display: flex;
+    width: min(560px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+    flex-direction: column;
+    gap: 6px;
+    padding: 7px;
+    color: var(--ink);
+    background: rgb(255 243 166 / 96%);
+    border: 2px solid rgb(255 255 255 / 88%);
+    border-radius: 20px;
+    box-shadow: 0 7px 0 rgb(23 54 93 / 18%), 0 18px 36px rgb(23 54 93 / 22%);
+    transform: translateX(-50%);
+    animation: mobile-dock-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    backdrop-filter: blur(12px);
+  }
+
+  .mobile-sticker-dock-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    margin-top: 10px;
+    padding-inline: 4px 1px;
   }
 
-  .inspector-actions button,
-  .delete-sticker-button {
+  .mobile-sticker-dock-heading > span {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: 7px;
+  }
+
+  .mobile-sticker-dock-heading strong {
+    flex: 0 0 auto;
+    font-size: 15px;
+  }
+
+  .mobile-sticker-dock-heading small {
+    overflow: hidden;
+    color: var(--ink-soft);
+    font-size: 12px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-sticker-dock-heading > button,
+  .mobile-adjustment-sheet-heading > button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    padding: 0;
+    place-items: center;
+    color: var(--ink);
+    background: rgb(255 255 255 / 76%);
+    border: 0;
+    border-radius: 11px;
+    box-shadow: inset 0 0 0 1px rgb(200 112 0 / 20%);
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  .mobile-sticker-dock-heading > button {
+    width: 30px;
+    height: 30px;
+  }
+
+  .mobile-sticker-dock-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    padding: 1px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .mobile-sticker-dock-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-sticker-dock-actions > button {
+    display: grid;
+    min-width: 50px;
+    height: 50px;
+    flex: 1 0 50px;
+    align-content: center;
+    justify-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    color: var(--ink);
+    background: rgb(255 255 255 / 78%);
+    border: 0;
+    border-radius: 13px;
+    box-shadow: inset 0 0 0 1px rgb(200 112 0 / 18%), 0 3px 0 rgb(200 112 0 / 14%);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .mobile-sticker-dock-actions > button:active {
+    box-shadow: inset 0 0 0 1px rgb(200 112 0 / 20%), 0 1px 0 rgb(200 112 0 / 14%);
+    transform: translateY(2px);
+  }
+
+  .mobile-sticker-dock-actions > button.is-enabled {
+    background: var(--sky-soft);
+    box-shadow: inset 0 0 0 2px var(--edge-blue-strong), 0 3px 0 rgb(23 142 196 / 16%);
+  }
+
+  .mobile-sticker-dock-actions > button.is-danger {
+    color: #b43a36;
+    background: #fff3f1;
+  }
+
+  .mobile-dock-divider {
+    width: 1px;
+    min-width: 1px;
+    margin-block: 7px;
+    background: rgb(200 112 0 / 22%);
+  }
+
+  .mobile-adjustment-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 42;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-top: max(16px, env(safe-area-inset-top));
+    pointer-events: none;
+  }
+
+  .mobile-adjustment-sheet {
+    display: flex;
+    width: min(620px, 100%);
+    max-height: min(70dvh, 620px);
+    flex-direction: column;
+    overflow: hidden;
+    color: var(--ink);
+    background: #fff3a6;
+    border: 2px solid rgb(255 255 255 / 88%);
+    border-bottom: 0;
+    border-radius: 26px 26px 0 0;
+    box-shadow: 0 -8px 32px rgb(23 54 93 / 22%);
+    pointer-events: auto;
+    animation: mobile-adjustment-sheet-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .mobile-adjustment-sheet::before {
+    width: 46px;
+    height: 5px;
+    flex: 0 0 auto;
+    align-self: center;
+    margin-top: 6px;
+    background: rgb(200 112 0 / 28%);
+    border-radius: 99px;
+    content: '';
+  }
+
+  .mobile-adjustment-sheet-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 12px 8px;
+    border-bottom: 2px dashed rgb(200 112 0 / 24%);
+  }
+
+  .mobile-adjustment-sheet-heading > div {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .mobile-adjustment-sheet-heading span {
+    color: var(--ink-soft);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .mobile-adjustment-sheet-heading strong {
+    font-size: 20px;
+  }
+
+  .mobile-adjustment-sheet-body {
+    min-height: 0;
+    padding: 10px 12px max(12px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .mobile-sheet-control-stack {
+    display: grid;
+    gap: 10px;
+  }
+
+  .mobile-sheet-control-stack .fill-color-control {
+    grid-template-areas:
+      "fill-label preset-label"
+      "fill-picker presets";
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .mobile-sheet-control-stack .fill-color-custom,
+  .mobile-sheet-control-stack .fill-color-preset-group {
+    display: contents;
+  }
+
+  .mobile-sheet-control-stack .fill-color-custom > .adjustment-label {
+    grid-area: fill-label;
+  }
+
+  .mobile-sheet-control-stack .fill-color-picker {
+    grid-area: fill-picker;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .mobile-sheet-control-stack .fill-color-presets {
+    grid-area: presets;
     width: 100%;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-self: stretch;
+    justify-self: stretch;
   }
 
-  .inspector-actions button:not(.delete-sticker-button) {
+  .mobile-sheet-control-stack .fill-color-preset-label {
+    display: block;
+    grid-area: preset-label;
+    font-size: 14px;
+  }
+
+  .mobile-color-sliders {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+  }
+
+  .mobile-sheet-control-stack .effect-controls {
+    padding-left: 0;
+  }
+
+  .mobile-sheet-reset {
+    width: 100%;
+    min-height: 40px;
+    align-self: end;
+    color: var(--ink) !important;
+    background: rgb(255 255 255 / 76%) !important;
+    border-color: rgb(200 112 0 / 22%) !important;
     font-size: 14px !important;
+  }
+
+  .mobile-transform-tip,
+  .mobile-effect-empty {
+    margin: 0;
+    padding: 11px 12px;
+    color: var(--ink-soft);
+    background: rgb(255 255 255 / 40%);
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.55;
+  }
+
+  .mobile-shadow-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
+
+  @keyframes mobile-dock-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 14px) scale(0.98);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+  }
+
+  @keyframes mobile-adjustment-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .bottom-toolbar {
@@ -2054,6 +2354,38 @@ input:focus-visible {
 
 }
 
+/* Height-based sticker sizing is touch-mobile-only. Each item keeps enough
+   intrinsic width for the full image instead of clipping wide stickers. */
+@media (max-width: 767px) and (hover: none) and (pointer: coarse) {
+  .sticker-list {
+    display: flex;
+    align-items: center;
+  }
+
+  .sticker-option {
+    width: auto;
+    min-width: 78px;
+    height: 82px;
+    min-height: 82px;
+    flex: 0 0 auto;
+    padding: 7px;
+  }
+
+  .sticker-thumbnail {
+    display: block;
+    width: auto;
+    height: 64px;
+  }
+
+  .sticker-thumbnail img {
+    width: auto;
+    max-width: none;
+    height: 64px;
+    max-height: 64px;
+    object-fit: contain;
+  }
+}
+
 @media (max-width: 480px) {
   .header-tag {
     display: none !important;
@@ -2095,6 +2427,34 @@ input:focus-visible {
   .effect-controls {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .mobile-shadow-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 9px;
+  }
+
+  .mobile-adjustment-sheet {
+    max-height: 68dvh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .mobile-adjustment-sheet-heading {
+    padding-inline: 10px;
+  }
+
+  .mobile-adjustment-sheet-body {
+    padding-inline: 10px;
+  }
+
+  .mobile-sheet-control-stack .fill-color-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .mobile-color-sliders {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 8px;
   }
 
   .bottom-copy {
