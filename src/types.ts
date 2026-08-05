@@ -1,4 +1,4 @@
-export type StickerFormat = 'PNG' | 'SVG';
+export type StickerFormat = 'PNG' | 'JPG' | 'WebP' | 'SVG';
 
 export interface StickerAsset {
   id: string;
@@ -153,5 +153,47 @@ export const STICKER_ASSETS: StickerAsset[] = [
     src: '/assets/stickers/orange-14.png',
     format: 'PNG',
     aspectRatio: 603 / 389,
+  },
+  {
+    id: 'anlan-1',
+    name: '安澜 1',
+    src: '/assets/stickers/anlan-1.png',
+    format: 'PNG',
+    aspectRatio: 289 / 374,
+  },
+  {
+    id: 'anlan-2',
+    name: '安澜 2',
+    src: '/assets/stickers/anlan-2.png',
+    format: 'PNG',
+    aspectRatio: 248 / 349,
+  },
+  {
+    id: 'anlan-3',
+    name: '安澜 3',
+    src: '/assets/stickers/anlan-3.png',
+    format: 'PNG',
+    aspectRatio: 283 / 419,
+  },
+  {
+    id: 'anlan-4',
+    name: '安澜 4',
+    src: '/assets/stickers/anlan-4.png',
+    format: 'PNG',
+    aspectRatio: 285 / 389,
+  },
+  {
+    id: 'anlan-5',
+    name: '安澜 5',
+    src: '/assets/stickers/anlan-5.png',
+    format: 'PNG',
+    aspectRatio: 895 / 282,
+  },
+  {
+    id: 'anlan-6',
+    name: '安澜 6',
+    src: '/assets/stickers/anlan-6.png',
+    format: 'PNG',
+    aspectRatio: 850 / 280,
   },
 ];

@@ -335,6 +335,48 @@ async function loadBackgroundFile(file: File): Promise<BackgroundImage> {
   });
 }
 
+function getStickerFormat(file: File): StickerAsset['format'] {
+  if (file.type === 'image/svg+xml') return 'SVG';
+  if (file.type === 'image/jpeg') return 'JPG';
+  if (file.type === 'image/webp') return 'WebP';
+  return 'PNG';
+}
+
+async function loadCustomStickerFile(file: File): Promise<StickerAsset> {
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+    throw new Error('仅支持 PNG、JPG、WebP 或 SVG 图片');
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error('贴纸图片不能超过 20 MB');
+  }
+
+  const src = URL.createObjectURL(file);
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => {
+      if (!image.naturalWidth || !image.naturalHeight) {
+        URL.revokeObjectURL(src);
+        reject(new Error('无法读取贴纸尺寸，请换一张图片重试'));
+        return;
+      }
+
+      const name = file.name.replace(/\.[^.]+$/, '').trim() || '自定义贴纸';
+      resolve({
+        id: `custom-${makeInstanceId()}`,
+        name,
+        src,
+        format: getStickerFormat(file),
+        aspectRatio: image.naturalWidth / image.naturalHeight,
+      });
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(src);
+      reject(new Error('贴纸图片读取失败，请换一张图片重试'));
+    };
+    image.src = src;
+  });
+}
+
 function makeInstanceId() {
   return typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -1262,33 +1304,66 @@ function MobileStickerControls({
 
 interface StickerLibraryProps {
   disabled: boolean;
+  customStickers: StickerAsset[];
   onAddSticker: (asset: StickerAsset) => void;
+  onUploadCustomSticker: (file: File) => void;
 }
 
-function StickerLibrary({ disabled, onAddSticker }: StickerLibraryProps) {
+function StickerLibrary({
+  disabled,
+  customStickers,
+  onAddSticker,
+  onUploadCustomSticker,
+}: StickerLibraryProps) {
+  const customStickerInputRef = useRef<HTMLInputElement>(null);
+  const remainingStickerAssets = [...customStickers.slice(1), ...STICKER_ASSETS];
+  const renderStickerOption = (asset: StickerAsset) => (
+    <button
+      className={`sticker-option${asset.id.startsWith('custom-') ? ' custom-sticker-option' : ''}`}
+      type="button"
+      key={asset.id}
+      disabled={disabled}
+      onClick={() => onAddSticker(asset)}
+      aria-label={`添加${asset.name}，${asset.format} 格式${asset.id === FIRST_RECOLORABLE_STICKER_ID ? '，支持换色' : ''}`}
+    >
+      {asset.id === FIRST_RECOLORABLE_STICKER_ID && (
+        <span className="sticker-color-badge" aria-hidden="true">
+          可换色
+        </span>
+      )}
+      <span className="sticker-thumbnail">
+        <img src={asset.src} alt="" draggable="false" />
+      </span>
+    </button>
+  );
+
   return (
     <Card className="sticker-library" color="app-blue">
       <strong className="library-title">贴纸</strong>
-      <div className="sticker-list" aria-label="预置贴纸列表">
-        {STICKER_ASSETS.map((asset) => (
-          <button
-            className="sticker-option"
-            type="button"
-            key={asset.id}
-            disabled={disabled}
-            onClick={() => onAddSticker(asset)}
-            aria-label={`添加${asset.name}，${asset.format} 格式${asset.id === FIRST_RECOLORABLE_STICKER_ID ? '，支持换色' : ''}`}
-          >
-            {asset.id === FIRST_RECOLORABLE_STICKER_ID && (
-              <span className="sticker-color-badge" aria-hidden="true">
-                可换色
-              </span>
-            )}
-            <span className="sticker-thumbnail">
-              <img src={asset.src} alt="" draggable="false" />
-            </span>
-          </button>
-        ))}
+      <input
+        ref={customStickerInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = '';
+          if (file) onUploadCustomSticker(file);
+        }}
+        aria-label="选择自定义贴纸"
+      />
+      <div className="sticker-list" aria-label="贴纸列表">
+        {customStickers[0] && renderStickerOption(customStickers[0])}
+        <button
+          className="sticker-option custom-sticker-upload"
+          type="button"
+          onClick={() => customStickerInputRef.current?.click()}
+          aria-label="上传自定义贴纸"
+        >
+          <UploadSimple size="1.65em" weight="duotone" aria-hidden="true" />
+          <span>上传贴纸</span>
+        </button>
+        {remainingStickerAssets.map(renderStickerOption)}
       </div>
       {disabled && <p className="library-hint">请先上传图片哦！</p>}
     </Card>
@@ -1325,6 +1400,7 @@ function ToastNotice({ toast, onClose }: { toast: ToastState; onClose: () => voi
 
 export function StickerEditor() {
   const [background, setBackground] = useState<BackgroundImage | null>(null);
+  const [customStickers, setCustomStickers] = useState<StickerAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
@@ -1337,6 +1413,7 @@ export function StickerEditor() {
   const stageRef = useRef<Konva.Stage>(null);
   const stageContainerRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const customStickerUrlsRef = useRef(new Set<string>());
   const canvasWidth = background?.width ?? DEFAULT_CANVAS_WIDTH;
   const canvasHeight = background?.height ?? DEFAULT_CANVAS_HEIGHT;
   const displayScale = useCanvasScale(stageContainerRef, canvasWidth, canvasHeight);
@@ -1354,8 +1431,26 @@ export function StickerEditor() {
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      customStickerUrlsRef.current.forEach((src) => URL.revokeObjectURL(src));
+      customStickerUrlsRef.current.clear();
     };
   }, []);
+
+  const uploadCustomSticker = useCallback(async (file: File) => {
+    try {
+      const sticker = await loadCustomStickerFile(file);
+      customStickerUrlsRef.current.add(sticker.src);
+      setCustomStickers((current) => [sticker, ...current]);
+      showToast('success', '自定义贴纸已加入', `${sticker.name} 已放在贴纸栏最前面`, 2800);
+    } catch (error) {
+      showToast(
+        'error',
+        '无法添加这张贴纸',
+        error instanceof Error ? error.message : '请检查图片后重试',
+        3800,
+      );
+    }
+  }, [showToast]);
 
   const selectedSticker = useMemo(
     () => history.stickers.find((sticker) => sticker.instanceId === selectedId) ?? null,
@@ -1707,7 +1802,12 @@ export function StickerEditor() {
       </div>
 
       <div className="workspace-body">
-        <StickerLibrary disabled={!background} onAddSticker={addSticker} />
+        <StickerLibrary
+          disabled={!background}
+          customStickers={customStickers}
+          onAddSticker={addSticker}
+          onUploadCustomSticker={(file) => void uploadCustomSticker(file)}
+        />
 
         <div className="canvas-column">
           <div

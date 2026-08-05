@@ -534,6 +534,54 @@ input:focus-visible {
   user-select: none;
 }
 
+.studio-shell .custom-sticker-upload {
+  min-height: 92px;
+  grid-template-rows: auto auto;
+  gap: 4px;
+  color: var(--sky-deep);
+  background: rgb(255 255 255 / 42%);
+  border-color: rgb(23 142 196 / 46%);
+  border-style: dashed;
+  font-size: 15px !important;
+  font-weight: 900;
+}
+
+.studio-shell .custom-sticker-upload:hover {
+  color: var(--ink);
+  background: rgb(255 255 255 / 70%);
+  border-color: #fff;
+}
+
+.custom-sticker-option .sticker-thumbnail {
+  display: grid;
+  width: 100%;
+  height: 72px;
+  place-items: center;
+}
+
+.custom-sticker-option .sticker-thumbnail img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.custom-sticker-option::after {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 2px 5px;
+  color: #fff;
+  background: rgb(23 142 196 / 86%);
+  border-radius: 999px;
+  content: '自定义';
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
 .library-hint {
   margin: 10px 0 0;
   color: var(--ink-soft);

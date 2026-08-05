@@ -71,6 +71,16 @@ export default function App() {
                 本网站是由《明日方舟》游戏爱好者制作。网站所涉及的公司名称、商标、产品等均为其各自所有者的资产，仅供识别。
               </p>
               <p>网站内使用的图片版权属于上海鹰角网络科技有限公司及其关联公司。</p>
+              <p>
+                部分贴纸来源于
+                <a
+                  href="https://space.bilibili.com/7986011"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  @安澜_QAQ
+                </a>
+              </p>
             </div>
             <div className="footer-meta">
               <div className="footer-links">
