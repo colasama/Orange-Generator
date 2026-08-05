@@ -375,7 +375,7 @@ input:focus-visible {
 
 .workspace-body {
   display: grid;
-  grid-template-columns: 174px minmax(0, 1fr);
+  grid-template-columns: 254px minmax(0, 1fr);
   gap: 16px;
   padding: 16px;
 }
@@ -388,6 +388,7 @@ input:focus-visible {
 }
 
 .sticker-library {
+  display: block;
   align-self: start;
   max-height: 704px;
   padding: 13px !important;
@@ -403,9 +404,15 @@ input:focus-visible {
   gap: 8px;
 }
 
+.library-heading {
+  display: grid;
+  gap: 9px;
+  margin: 4px 0 12px;
+}
+
 .library-title {
   display: block;
-  margin: 4px 0 14px;
+  margin: 0;
   color: #fff;
   font-size: 29px;
   font-weight: 900;
@@ -416,8 +423,45 @@ input:focus-visible {
   paint-order: stroke fill;
 }
 
+.sticker-source-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  padding: 4px;
+  background: rgb(255 255 255 / 38%);
+  border: 1px solid rgb(23 142 196 / 20%);
+  border-radius: 999px;
+}
+
+.sticker-source-tabs button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 7px;
+  color: var(--sky-deep);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  font-size: 13px !important;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.sticker-source-tabs button:hover {
+  background: rgb(255 255 255 / 54%);
+}
+
+.sticker-source-tabs button.is-active {
+  color: #fff;
+  background: var(--sky-deep);
+  box-shadow: 0 2px 0 rgb(23 54 93 / 18%);
+}
+
 .sticker-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: row;
   gap: 8px;
   max-height: 595px;
   padding-top: 12px;
@@ -461,14 +505,15 @@ input:focus-visible {
   }
 
   .sticker-list .sticker-option {
-    padding: 10px;
+    padding: 8px;
   }
 }
 
 .sticker-option {
   position: relative;
   display: grid;
-  min-height: 72px;
+  min-height: 0;
+  height: 92px;
   padding: 6px;
   overflow: hidden;
   place-items: center;
@@ -478,6 +523,7 @@ input:focus-visible {
   border-radius: var(--radius-control);
   box-shadow: none;
   cursor: pointer;
+  scroll-snap-align: start;
   transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms ease,
     border-color 160ms ease;
 }
@@ -503,8 +549,8 @@ input:focus-visible {
 
 .sticker-color-badge {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  right: 4px;
+  bottom: 4px;
   z-index: 1;
   display: inline-flex;
   align-items: center;
@@ -522,15 +568,20 @@ input:focus-visible {
 }
 
 .sticker-thumbnail {
-  display: block;
+  display: flex;
   width: 100%;
-  height: auto;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
 }
 
 .sticker-thumbnail img {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
+  max-height: 100%;
+  object-fit: contain;
   user-select: none;
 }
 
@@ -1634,7 +1685,7 @@ input:focus-visible {
   }
 
   .workspace-body {
-    grid-template-columns: 154px minmax(0, 1fr);
+    grid-template-columns: 218px minmax(0, 1fr);
     gap: 12px;
     padding: 12px;
   }
@@ -1922,6 +1973,7 @@ input:focus-visible {
   }
 
   .sticker-library {
+    display: block;
     width: 100%;
     max-height: none;
     padding: 10px !important;
@@ -1931,13 +1983,28 @@ input:focus-visible {
   }
 
   .library-title {
-    margin: 2px 0 9px;
+    margin: 0;
     font-size: 27px;
+  }
+
+  .library-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 2px 1px 9px;
+  }
+
+  .sticker-source-tabs {
+    flex: 0 0 auto;
+    width: min(196px, 62vw);
   }
 
   .sticker-list {
     display: grid;
-    grid-auto-columns: 92px;
+    grid-template-columns: none;
+    grid-template-rows: repeat(2, 78px);
+    grid-auto-columns: 88px;
     grid-auto-flow: column;
     gap: 7px;
     max-height: none;
@@ -1948,13 +2015,14 @@ input:focus-visible {
   }
 
   .sticker-option {
-    min-height: 76px;
-    padding: 8px;
+    height: 78px;
+    min-height: 78px;
+    padding: 7px;
     scroll-snap-align: start;
   }
 
   .studio-shell .custom-sticker-upload {
-    min-height: 76px;
+    min-height: 78px;
   }
 
   .library-hint {
@@ -2391,40 +2459,42 @@ input:focus-visible {
 
 }
 
-/* Height-based sticker sizing is touch-mobile-only. Each item keeps enough
-   intrinsic width for the full image instead of clipping wide stickers. */
+/* Touch screens keep the same two-row reading order, with compact fixed cells.
+   Images use contain sizing so wide UI stickers remain fully visible. */
 @media (max-width: 767px) and (hover: none) and (pointer: coarse) {
   .sticker-list {
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: none;
+    grid-template-rows: repeat(2, 78px);
+    grid-auto-columns: 88px;
+    grid-auto-flow: column;
   }
 
   .sticker-option {
-    width: auto;
-    min-width: 78px;
-    height: 82px;
-    min-height: 82px;
-    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    height: 78px;
+    min-height: 78px;
     padding: 7px;
   }
 
   .sticker-thumbnail {
-    display: block;
-    width: auto;
-    height: 64px;
+    display: flex;
+    width: 100%;
+    height: 100%;
   }
 
   .sticker-thumbnail img {
     width: auto;
-    max-width: none;
-    height: 64px;
-    max-height: 64px;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
     object-fit: contain;
   }
 
   .studio-shell .custom-sticker-upload {
-    width: 86px;
-    min-width: 86px;
+    width: 100%;
+    min-width: 0;
   }
 }
 
