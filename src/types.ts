@@ -1,4 +1,4 @@
-export type StickerFormat = 'PNG' | 'JPG' | 'WebP' | 'SVG';
+export type StickerFormat = 'PNG' | 'JPG' | 'WebP' | 'SVG' | 'GIF';
 
 export interface StickerAsset {
   id: string;
@@ -48,28 +48,19 @@ export interface BackgroundImage {
 export const DEFAULT_CANVAS_WIDTH = 1200;
 export const DEFAULT_CANVAS_HEIGHT = 840;
 
-type PngStickerDefinition = readonly [
+type RasterStickerDefinition = readonly [
   id: string,
   name: string,
   src: string,
   aspectRatio: number,
 ];
 
-const createPngSticker = ([
-  id,
-  name,
-  src,
-  aspectRatio,
-]: PngStickerDefinition): StickerAsset => ({
-  id,
-  name,
-  src,
-  format: 'PNG',
-  source: 'official',
-  aspectRatio,
-});
+const createRasterSticker = (
+  format: Extract<StickerFormat, 'PNG' | 'GIF'>,
+  [id, name, src, aspectRatio]: RasterStickerDefinition,
+): StickerAsset => ({ id, name, src, format, source: 'official', aspectRatio });
 
-const ANGELINA_STICKERS: PngStickerDefinition[] = [
+const ANGELINA_PNG_STICKERS: RasterStickerDefinition[] = [
   ['angelina-sitting', '安心院·坐坐', '/assets/stickers/angelina-sitting.png', 1],
   ['angelina-photo', '安心院·拍照', '/assets/stickers/angelina-photo.png', 1],
   ['angelina-adventure', '安心院·探险', '/assets/stickers/angelina-adventure.png', 1],
@@ -108,6 +99,19 @@ const ANGELINA_STICKERS: PngStickerDefinition[] = [
   ['angelina-ui-25', '安心院 UI 25', '/assets/stickers/angelina-ui-25.png', 48 / 49],
   ['angelina-ui-26', '安心院 UI 26', '/assets/stickers/angelina-ui-26.png', 49 / 47],
   ['angelina-ui-27', '安心院 UI 27', '/assets/stickers/angelina-ui-27.png', 168 / 159],
+];
+
+const ANGELINA_GIF_STICKERS: RasterStickerDefinition[] = [
+  ['angelina-sitting-gif', '安心院·坐坐（动态）', '/assets/stickers/angelina-sitting.gif', 1],
+  ['angelina-photo-gif', '安心院·拍照（动态）', '/assets/stickers/angelina-photo.gif', 1],
+  ['angelina-adventure-gif', '安心院·探险（动态）', '/assets/stickers/angelina-adventure.gif', 1],
+  ['angelina-seaside-gif', '安心院·海边（动态）', '/assets/stickers/angelina-seaside.gif', 1],
+  ['angelina-diving-gif', '安心院·潜水（动态）', '/assets/stickers/angelina-diving.gif', 1],
+  ['angelina-reading-gif', '安心院·看书（动态）', '/assets/stickers/angelina-reading.gif', 1],
+  ['angelina-paper-plane-gif', '安心院·纸飞机（动态）', '/assets/stickers/angelina-paper-plane.gif', 1],
+  ['angelina-shopping-gif', '安心院·购物（动态）', '/assets/stickers/angelina-shopping.gif', 1],
+  ['angelina-delivery-gif', '安心院·送货（动态）', '/assets/stickers/angelina-delivery.gif', 1],
+  ['angelina-cycling-gif', '安心院·骑行（动态）', '/assets/stickers/angelina-cycling.gif', 1],
 ];
 
 export const STICKER_ASSETS: StickerAsset[] = [
@@ -266,5 +270,6 @@ export const STICKER_ASSETS: StickerAsset[] = [
     source: 'fan',
     aspectRatio: 850 / 280,
   },
-  ...ANGELINA_STICKERS.map(createPngSticker),
+  ...ANGELINA_PNG_STICKERS.map((definition) => createRasterSticker('PNG', definition)),
+  ...ANGELINA_GIF_STICKERS.map((definition) => createRasterSticker('GIF', definition)),
 ];

@@ -44,6 +44,8 @@ import {
   type StickerAsset,
 } from "../types";
 import { useHtmlImage } from "../hooks/useHtmlImage";
+import { waitForGifControllers } from "../hooks/useGifCanvas";
+import { GifEncodingSession } from "../gifExport";
 import { StickerNode } from "./StickerNode";
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -52,7 +54,11 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/webp",
   "image/svg+xml",
 ]);
+const ALLOWED_STICKER_TYPES = new Set([...ALLOWED_IMAGE_TYPES, "image/gif"]);
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const GIF_EXPORT_FPS = 12;
+const GIF_EXPORT_MAX_DURATION_MS = 6_000;
+const GIF_EXPORT_MAX_PIXELS = 1_500_000;
 const RECOLOR_HINT_SESSION_KEY = "orange-generator:recolor-hint-shown";
 const FIRST_RECOLORABLE_STICKER_ID = STICKER_ASSETS.find(
   (asset) => asset.format === "SVG" && asset.defaultFillColor
@@ -180,10 +186,10 @@ function blobToDataUrl(blob: Blob) {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("浏览器无法读取生成的 PNG 图片"));
+      else reject(new Error("浏览器无法读取生成的图片"));
     };
     reader.onerror = () =>
-      reject(reader.error ?? new Error("浏览器无法读取生成的 PNG 图片"));
+      reject(reader.error ?? new Error("浏览器无法读取生成的图片"));
     reader.readAsDataURL(blob);
   });
 }
@@ -345,6 +351,7 @@ async function loadBackgroundFile(file: File): Promise<BackgroundImage> {
 }
 
 function getStickerFormat(file: File): StickerAsset["format"] {
+  if (file.type === "image/gif") return "GIF";
   if (file.type === "image/svg+xml") return "SVG";
   if (file.type === "image/jpeg") return "JPG";
   if (file.type === "image/webp") return "WebP";
@@ -352,8 +359,8 @@ function getStickerFormat(file: File): StickerAsset["format"] {
 }
 
 async function loadCustomStickerFile(file: File): Promise<StickerAsset> {
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error("仅支持 PNG、JPG、WebP 或 SVG 图片");
+  if (!ALLOWED_STICKER_TYPES.has(file.type)) {
+    throw new Error("仅支持 PNG、JPG、WebP、SVG 或 GIF 图片");
   }
   if (file.size > MAX_FILE_SIZE) {
     throw new Error("贴纸图片不能超过 20 MB");
@@ -1384,13 +1391,16 @@ function StickerLibrary({
   onUploadCustomSticker,
 }: StickerLibraryProps) {
   const customStickerInputRef = useRef<HTMLInputElement>(null);
-  const [activeSource, setActiveSource] = useState<"official" | "fan">(
-    "official"
-  );
-  const stickerAssets = STICKER_ASSETS.filter(
-    (asset) =>
+  const [activeSource, setActiveSource] = useState<
+    "official" | "fan" | "gif"
+  >("official");
+  const stickerAssets = STICKER_ASSETS.filter((asset) => {
+    if (activeSource === "gif") return asset.format === "GIF";
+    if (asset.format === "GIF") return false;
+    return (
       asset.source === "both" || (asset.source ?? "fan") === activeSource
-  );
+    );
+  });
   const renderStickerOption = (asset: StickerAsset) => (
     <button
       className={`sticker-option${
@@ -1407,6 +1417,11 @@ function StickerLibrary({
       {asset.id === FIRST_RECOLORABLE_STICKER_ID && (
         <span className="sticker-color-badge" aria-hidden="true">
           可换色
+        </span>
+      )}
+      {asset.format === "GIF" && (
+        <span className="sticker-gif-badge" aria-hidden="true">
+          GIF
         </span>
       )}
       <span className="sticker-thumbnail">
@@ -1444,13 +1459,23 @@ function StickerLibrary({
           >
             饭制
           </button>
+          <button
+            className={activeSource === "gif" ? "is-active" : undefined}
+            type="button"
+            role="tab"
+            aria-selected={activeSource === "gif"}
+            aria-controls="sticker-list"
+            onClick={() => setActiveSource("gif")}
+          >
+            GIF
+          </button>
         </div>
       </div>
       <input
         ref={customStickerInputRef}
         className="visually-hidden"
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
@@ -1468,7 +1493,13 @@ function StickerLibrary({
           <UploadSimple size="1.65em" weight="duotone" aria-hidden="true" />
           <span>上传贴纸</span>
         </button>
-        {customStickers.map(renderStickerOption)}
+        {customStickers
+          .filter((asset) =>
+            activeSource === "gif"
+              ? asset.format === "GIF"
+              : asset.format !== "GIF"
+          )
+          .map(renderStickerOption)}
         {stickerAssets.map(renderStickerOption)}
       </div>
       {disabled && <p className="library-hint">请先上传图片哦！</p>}
@@ -1788,6 +1819,10 @@ export function StickerEditor() {
     }
 
     const generationStartedAt = performance.now();
+    const animatedStickerIds = history.stickers
+      .filter((sticker) => sticker.format === "GIF")
+      .map((sticker) => sticker.instanceId);
+    const isGifExport = animatedStickerIds.length > 0;
     setExportState({ status: "generating" });
     const previousSelection = selectedId;
     setSelectedId(null);
@@ -1803,28 +1838,71 @@ export function StickerEditor() {
         scaleX: stage.scaleX(),
         scaleY: stage.scaleY(),
       };
-      let exportCanvas: HTMLCanvasElement;
+      const gifControllers = isGifExport
+        ? await waitForGifControllers(animatedStickerIds)
+        : [];
+      let encodingSession: GifEncodingSession | null = null;
+      let blob: Blob;
       try {
+        gifControllers.forEach((controller) => controller.pause());
         stage.size({ width: background.width, height: background.height });
         stage.scale({ x: 1, y: 1 });
-        stage.batchDraw();
-        exportCanvas = stage.toCanvas({
-          pixelRatio: 1,
-        });
+
+        if (isGifExport) {
+          const pixelRatio = Math.min(
+            1,
+            Math.sqrt(
+              GIF_EXPORT_MAX_PIXELS / Math.max(1, background.width * background.height)
+            )
+          );
+          const exportWidth = Math.max(1, Math.round(background.width * pixelRatio));
+          const exportHeight = Math.max(1, Math.round(background.height * pixelRatio));
+          const frameDelay = Math.round(1000 / GIF_EXPORT_FPS);
+          const duration = Math.min(
+            GIF_EXPORT_MAX_DURATION_MS,
+            Math.max(...gifControllers.map((controller) => controller.duration))
+          );
+          const frameCount = Math.max(1, Math.ceil(duration / frameDelay));
+          encodingSession = await GifEncodingSession.create(exportWidth, exportHeight);
+
+          for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+            const timeMs = frameIndex * frameDelay;
+            gifControllers.forEach((controller) => controller.renderAt(timeMs));
+            stage.batchDraw();
+            const frameCanvas = stage.toCanvas({ pixelRatio });
+            const context = frameCanvas.getContext("2d", { willReadFrequently: true });
+            if (!context) throw new Error("浏览器无法读取 GIF 合成画布");
+            await encodingSession.addFrame(
+              context.getImageData(0, 0, exportWidth, exportHeight),
+              frameDelay
+            );
+          }
+
+          blob = await encodingSession.finish();
+        } else {
+          stage.batchDraw();
+          const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
+          blob = await canvasToPngBlob(exportCanvas);
+        }
       } finally {
+        encodingSession?.terminate();
         stage.size({
           width: previousStage.width,
           height: previousStage.height,
         });
         stage.scale({ x: previousStage.scaleX, y: previousStage.scaleY });
         stage.batchDraw();
+        gifControllers.forEach((controller) => controller.play());
       }
-      const blob = await canvasToPngBlob(exportCanvas);
       const fileBase = background.name
         .replace(/\.[^.]+$/, "")
         .replace(/[^\w\u4e00-\u9fa5-]+/g, "-");
-      const fileName = `${fileBase || "安心院小姐的酸橙味照片"}-贴纸版.png`;
-      const file = new File([blob], fileName, { type: "image/png" });
+      const fileExtension = isGifExport ? "gif" : "png";
+      const mimeType = isGifExport ? "image/gif" : "image/png";
+      const fileName = `${
+        fileBase || "安心院小姐的酸橙味照片"
+      }-贴纸版.${fileExtension}`;
+      const file = new File([blob], fileName, { type: mimeType });
       const previewUrl = await blobToDataUrl(blob);
       const remainingDisplayTime =
         MIN_GENERATING_DISPLAY_MS - (performance.now() - generationStartedAt);
@@ -1837,7 +1915,7 @@ export function StickerEditor() {
       if (shouldUseMobileSaveFlow()) {
         // Mobile Safari and some in-app browsers can display a blob URL but
         // save an empty/gray image from the long-press menu. A self-contained
-        // PNG data URL keeps the actual bytes available to that save flow.
+        // A data URL keeps the actual bytes available to that save flow.
         setExportState({ status: "ready", image: { file, url: previewUrl } });
         return;
       }
@@ -1851,7 +1929,12 @@ export function StickerEditor() {
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setExportState({ status: "ready", image: { file, url: previewUrl } });
-      showToast("success", "已开始下载", "正在导出原图尺寸的 PNG", 2500);
+      showToast(
+        "success",
+        "已开始下载",
+        isGifExport ? "动态贴纸已合成为循环 GIF" : "正在导出原图尺寸的 PNG",
+        2500
+      );
     } catch (error) {
       setExportState({
         status: "error",
@@ -1864,6 +1947,12 @@ export function StickerEditor() {
       setSelectedId(previousSelection);
     }
   };
+
+  const exportFormatLabel = history.stickers.some(
+    (sticker) => sticker.format === "GIF"
+  )
+    ? "GIF"
+    : "PNG";
 
   const exportedImage =
     exportState.status === "ready" ? exportState.image : null;
@@ -2180,8 +2269,8 @@ export function StickerEditor() {
               aria-modal="true"
               aria-label={
                 exportState.status === "generating"
-                  ? "正在生成 PNG 图片"
-                  : "保存 PNG 图片"
+                  ? `正在生成 ${exportFormatLabel} 图片`
+                  : `保存 ${exportFormatLabel} 图片`
               }
               aria-busy={exportState.status === "generating"}
             >
@@ -2197,8 +2286,12 @@ export function StickerEditor() {
                     alt=""
                   />
                   <div className="export-generating-copy">
-                    <strong>正在生成图片…</strong>
-                    <span>图片尺寸较大时可能需要几秒</span>
+                    <strong>正在生成 {exportFormatLabel}…</strong>
+                    <span>
+                      {exportFormatLabel === "GIF"
+                        ? "正在逐帧合成动态贴纸，可能需要几秒"
+                        : "图片尺寸较大时可能需要几秒"}
+                    </span>
                   </div>
                 </div>
               )}
