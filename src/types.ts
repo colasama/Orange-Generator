@@ -5,6 +5,7 @@ export interface StickerAsset {
   name: string;
   src: string;
   format: StickerFormat;
+  source?: 'official' | 'fan' | 'both';
   aspectRatio?: number;
   defaultFillColor?: string;
 }
@@ -47,12 +48,75 @@ export interface BackgroundImage {
 export const DEFAULT_CANVAS_WIDTH = 1200;
 export const DEFAULT_CANVAS_HEIGHT = 840;
 
+type PngStickerDefinition = readonly [
+  id: string,
+  name: string,
+  src: string,
+  aspectRatio: number,
+];
+
+const createPngSticker = ([
+  id,
+  name,
+  src,
+  aspectRatio,
+]: PngStickerDefinition): StickerAsset => ({
+  id,
+  name,
+  src,
+  format: 'PNG',
+  source: 'official',
+  aspectRatio,
+});
+
+const ANGELINA_STICKERS: PngStickerDefinition[] = [
+  ['angelina-sitting', '安心院·坐坐', '/assets/stickers/angelina-sitting.png', 1],
+  ['angelina-photo', '安心院·拍照', '/assets/stickers/angelina-photo.png', 1],
+  ['angelina-adventure', '安心院·探险', '/assets/stickers/angelina-adventure.png', 1],
+  ['angelina-seaside', '安心院·海边', '/assets/stickers/angelina-seaside.png', 1],
+  ['angelina-diving', '安心院·潜水', '/assets/stickers/angelina-diving.png', 1],
+  ['angelina-reading', '安心院·看书', '/assets/stickers/angelina-reading.png', 1],
+  ['angelina-paper-plane', '安心院·纸飞机', '/assets/stickers/angelina-paper-plane.png', 1],
+  ['angelina-shopping', '安心院·购物', '/assets/stickers/angelina-shopping.png', 1],
+  ['angelina-delivery', '安心院·送货', '/assets/stickers/angelina-delivery.png', 1],
+  ['angelina-cycling', '安心院·骑行', '/assets/stickers/angelina-cycling.png', 1],
+  ['angelina-ui-01', '安心院 UI 01', '/assets/stickers/angelina-ui-01.png', 521 / 416],
+  ['angelina-ui-02', '安心院 UI 02', '/assets/stickers/angelina-ui-02.png', 135 / 411],
+  ['angelina-ui-03', '安心院 UI 03', '/assets/stickers/angelina-ui-03.png', 71 / 70],
+  ['angelina-ui-04', '安心院 UI 04', '/assets/stickers/angelina-ui-04.png', 77 / 61],
+  ['angelina-ui-05', '安心院 UI 05', '/assets/stickers/angelina-ui-05.png', 67 / 70],
+  ['angelina-ui-06', '安心院 UI 06', '/assets/stickers/angelina-ui-06.png', 84 / 64],
+  ['angelina-ui-07', '安心院 UI 07', '/assets/stickers/angelina-ui-07.png', 78 / 76],
+  ['angelina-ui-08', '安心院 UI 08', '/assets/stickers/angelina-ui-08.png', 139 / 126],
+  ['angelina-ui-09', '安心院 UI 09', '/assets/stickers/angelina-ui-09.png', 804 / 421],
+  ['angelina-ui-09-alt', '安心院 UI 09 备选', '/assets/stickers/angelina-ui-09-alt.png', 804 / 421],
+  ['angelina-ui-10', '安心院 UI 10', '/assets/stickers/angelina-ui-10.png', 479 / 150],
+  ['angelina-ui-11', '安心院 UI 11', '/assets/stickers/angelina-ui-11.png', 479 / 150],
+  ['angelina-ui-12', '安心院 UI 12', '/assets/stickers/angelina-ui-12.png', 214 / 212],
+  ['angelina-ui-13', '安心院 UI 13', '/assets/stickers/angelina-ui-13.png', 214 / 212],
+  ['angelina-ui-14', '安心院 UI 14', '/assets/stickers/angelina-ui-14.png', 248 / 60],
+  ['angelina-ui-15', '安心院 UI 15', '/assets/stickers/angelina-ui-15.png', 629 / 116],
+  ['angelina-ui-16', '安心院 UI 16', '/assets/stickers/angelina-ui-16.png', 223 / 145],
+  ['angelina-ui-17', '安心院 UI 17', '/assets/stickers/angelina-ui-17.png', 270 / 136],
+  ['angelina-ui-18', '安心院 UI 18', '/assets/stickers/angelina-ui-18.png', 199 / 138],
+  ['angelina-ui-19', '安心院 UI 19', '/assets/stickers/angelina-ui-19.png', 249 / 57],
+  ['angelina-ui-20', '安心院 UI 20', '/assets/stickers/angelina-ui-20.png', 257 / 97],
+  ['angelina-ui-21', '安心院 UI 21', '/assets/stickers/angelina-ui-21.png', 231 / 54],
+  ['angelina-ui-22', '安心院 UI 22', '/assets/stickers/angelina-ui-22.png', 508 / 395],
+  ['angelina-ui-23', '安心院 UI 23', '/assets/stickers/angelina-ui-23.png', 132 / 153],
+  ['angelina-ui-24', '安心院 UI 24', '/assets/stickers/angelina-ui-24.png', 83 / 84],
+  ['angelina-ui-25', '安心院 UI 25', '/assets/stickers/angelina-ui-25.png', 48 / 49],
+  ['angelina-ui-26', '安心院 UI 26', '/assets/stickers/angelina-ui-26.png', 49 / 47],
+  ['angelina-ui-27', '安心院 UI 27', '/assets/stickers/angelina-ui-27.png', 168 / 159],
+];
+
 export const STICKER_ASSETS: StickerAsset[] = [
   {
     id: 'orange-lettering',
     name: '酸橙宣言',
     src: '/assets/stickers/orange-lettering.svg',
     format: 'SVG',
+    source: 'both',
     aspectRatio: 1734 / 848,
     defaultFillColor: '#096BC1',
   },
@@ -159,6 +223,7 @@ export const STICKER_ASSETS: StickerAsset[] = [
     name: '安澜 1',
     src: '/assets/stickers/anlan-1.png',
     format: 'PNG',
+    source: 'fan',
     aspectRatio: 289 / 374,
   },
   {
@@ -166,6 +231,7 @@ export const STICKER_ASSETS: StickerAsset[] = [
     name: '安澜 2',
     src: '/assets/stickers/anlan-2.png',
     format: 'PNG',
+    source: 'fan',
     aspectRatio: 248 / 349,
   },
   {
@@ -173,6 +239,7 @@ export const STICKER_ASSETS: StickerAsset[] = [
     name: '安澜 3',
     src: '/assets/stickers/anlan-3.png',
     format: 'PNG',
+    source: 'fan',
     aspectRatio: 283 / 419,
   },
   {
@@ -180,6 +247,7 @@ export const STICKER_ASSETS: StickerAsset[] = [
     name: '安澜 4',
     src: '/assets/stickers/anlan-4.png',
     format: 'PNG',
+    source: 'fan',
     aspectRatio: 285 / 389,
   },
   {
@@ -187,6 +255,7 @@ export const STICKER_ASSETS: StickerAsset[] = [
     name: '安澜 5',
     src: '/assets/stickers/anlan-5.png',
     format: 'PNG',
+    source: 'fan',
     aspectRatio: 895 / 282,
   },
   {
@@ -194,6 +263,8 @@ export const STICKER_ASSETS: StickerAsset[] = [
     name: '安澜 6',
     src: '/assets/stickers/anlan-6.png',
     format: 'PNG',
+    source: 'fan',
     aspectRatio: 850 / 280,
   },
+  ...ANGELINA_STICKERS.map(createPngSticker),
 ];

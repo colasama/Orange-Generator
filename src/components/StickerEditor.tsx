@@ -7,14 +7,9 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
-} from 'react';
-import { createPortal } from 'react-dom';
-import {
-  Button,
-  Card,
-  Modal,
-  Tooltip,
-} from 'animal-island-ui';
+} from "react";
+import { createPortal } from "react-dom";
+import { Button, Card, Modal, Tooltip } from "animal-island-ui";
 import {
   ArrowClockwise,
   ArrowCounterClockwise,
@@ -37,9 +32,9 @@ import {
   WarningCircle,
   XCircle,
   X,
-} from '@phosphor-icons/react';
-import Konva from 'konva';
-import { Image as KonvaImage, Layer, Rect, Stage } from 'react-konva';
+} from "@phosphor-icons/react";
+import Konva from "konva";
+import { Image as KonvaImage, Layer, Rect, Stage } from "react-konva";
 import {
   DEFAULT_CANVAS_HEIGHT,
   DEFAULT_CANVAS_WIDTH,
@@ -47,20 +42,25 @@ import {
   type BackgroundImage,
   type PlacedSticker,
   type StickerAsset,
-} from '../types';
-import { useHtmlImage } from '../hooks/useHtmlImage';
-import { StickerNode } from './StickerNode';
+} from "../types";
+import { useHtmlImage } from "../hooks/useHtmlImage";
+import { StickerNode } from "./StickerNode";
 
-const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
+const ALLOWED_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+]);
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
-const RECOLOR_HINT_SESSION_KEY = 'orange-generator:recolor-hint-shown';
+const RECOLOR_HINT_SESSION_KEY = "orange-generator:recolor-hint-shown";
 const FIRST_RECOLORABLE_STICKER_ID = STICKER_ASSETS.find(
-  (asset) => asset.format === 'SVG' && asset.defaultFillColor,
+  (asset) => asset.format === "SVG" && asset.defaultFillColor
 )?.id;
 
 type StickerUpdater = (stickers: PlacedSticker[]) => PlacedSticker[];
-type ToastKind = 'success' | 'info' | 'warning' | 'error';
-type MobileAdjustmentSection = 'color' | 'transform' | 'outline' | 'shadow';
+type ToastKind = "success" | "info" | "warning" | "error";
+type MobileAdjustmentSection = "color" | "transform" | "outline" | "shadow";
 
 interface ToastState {
   kind: ToastKind;
@@ -74,30 +74,30 @@ interface ExportedImage {
 }
 
 type ExportState =
-  | { status: 'idle' }
-  | { status: 'generating' }
-  | { status: 'ready'; image: ExportedImage }
-  | { status: 'error'; message: string };
+  | { status: "idle" }
+  | { status: "generating" }
+  | { status: "ready"; image: ExportedImage }
+  | { status: "error"; message: string };
 
 function CanvasButtonLabel({ text }: { text: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
-    const button = canvas?.closest('button');
+    const button = canvas?.closest("button");
     if (!canvas || !button) return;
 
     const draw = () => {
       const styles = window.getComputedStyle(button);
       const fontSize = Number.parseFloat(styles.fontSize) || 24;
       const configuredStrokeWidth = Number.parseFloat(
-        styles.getPropertyValue('--save-label-stroke-width'),
+        styles.getPropertyValue("--save-label-stroke-width")
       );
       const strokeWidth = Number.isFinite(configuredStrokeWidth)
         ? configuredStrokeWidth
         : Math.max(2, fontSize * 0.2);
       const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
-      const context = canvas.getContext('2d');
+      const context = canvas.getContext("2d");
       if (!context) return;
 
       const font = `${styles.fontStyle} ${styles.fontWeight} ${fontSize}px ${styles.fontFamily}`;
@@ -113,12 +113,13 @@ function CanvasButtonLabel({ text }: { text: string }) {
 
       context.scale(pixelRatio, pixelRatio);
       context.font = font;
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.lineJoin = 'round';
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.lineJoin = "round";
       context.lineWidth = strokeWidth;
-      context.strokeStyle = styles.getPropertyValue('--save-label-stroke').trim() || '#df8700';
-      context.fillStyle = '#fff';
+      context.strokeStyle =
+        styles.getPropertyValue("--save-label-stroke").trim() || "#df8700";
+      context.fillStyle = "#fff";
       context.strokeText(text, width / 2, height / 2);
       context.fillText(text, width / 2, height / 2);
     };
@@ -143,28 +144,34 @@ function CanvasButtonLabel({ text }: { text: string }) {
       subtree: true,
     });
 
-    window.addEventListener('resize', scheduleDraw);
-    document.fonts?.addEventListener('loadingdone', scheduleDraw);
+    window.addEventListener("resize", scheduleDraw);
+    document.fonts?.addEventListener("loadingdone", scheduleDraw);
     void document.fonts?.ready.then(scheduleDraw);
 
     return () => {
       window.cancelAnimationFrame(drawFrame);
       resizeObserver.disconnect();
       styleObserver.disconnect();
-      window.removeEventListener('resize', scheduleDraw);
-      document.fonts?.removeEventListener('loadingdone', scheduleDraw);
+      window.removeEventListener("resize", scheduleDraw);
+      document.fonts?.removeEventListener("loadingdone", scheduleDraw);
     };
   }, [text]);
 
-  return <canvas ref={canvasRef} className="canvas-button-label" aria-hidden="true" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="canvas-button-label"
+      aria-hidden="true"
+    />
+  );
 }
 
 function canvasToPngBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
-      else reject(new Error('浏览器无法生成 PNG 图片'));
-    }, 'image/png');
+      else reject(new Error("浏览器无法生成 PNG 图片"));
+    }, "image/png");
   });
 }
 
@@ -172,34 +179,35 @@ function blobToDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error('浏览器无法读取生成的 PNG 图片'));
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("浏览器无法读取生成的 PNG 图片"));
     };
-    reader.onerror = () => reject(reader.error ?? new Error('浏览器无法读取生成的 PNG 图片'));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("浏览器无法读取生成的 PNG 图片"));
     reader.readAsDataURL(blob);
   });
 }
 
 function shouldUseMobileSaveFlow() {
   return (
-    window.matchMedia('(hover: none) and (pointer: coarse)').matches ||
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches ||
     window.innerWidth <= 767
   );
 }
 
 function useMobileLayout() {
   const [isMobileLayout, setIsMobileLayout] = useState(
-    () => window.matchMedia('(max-width: 767px)').matches,
+    () => window.matchMedia("(max-width: 767px)").matches
   );
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
     const updateLayout = () => setIsMobileLayout(mediaQuery.matches);
 
     updateLayout();
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', updateLayout);
-      return () => mediaQuery.removeEventListener('change', updateLayout);
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateLayout);
+      return () => mediaQuery.removeEventListener("change", updateLayout);
     }
 
     mediaQuery.addListener(updateLayout);
@@ -212,8 +220,8 @@ function useMobileLayout() {
 function canShareFile(file: File) {
   try {
     return (
-      typeof navigator.share === 'function' &&
-      typeof navigator.canShare === 'function' &&
+      typeof navigator.share === "function" &&
+      typeof navigator.canShare === "function" &&
       navigator.canShare({ files: [file] })
     );
   } catch {
@@ -276,7 +284,7 @@ function useStickerHistory() {
 function useCanvasScale(
   containerRef: React.RefObject<HTMLDivElement | null>,
   canvasWidth: number,
-  canvasHeight: number,
+  canvasHeight: number
 ) {
   const [scale, setScale] = useState(1);
 
@@ -289,19 +297,20 @@ function useCanvasScale(
       const widthScale = availableWidth / canvasWidth;
       const isDesktop = window.innerWidth >= 768;
       const availableHeight = container.clientHeight;
-      const heightScale = isDesktop && availableHeight > 0
-        ? availableHeight / canvasHeight
-        : Number.POSITIVE_INFINITY;
+      const heightScale =
+        isDesktop && availableHeight > 0
+          ? availableHeight / canvasHeight
+          : Number.POSITIVE_INFINITY;
       setScale(Math.max(0.01, Math.min(8, widthScale, heightScale)));
     };
 
     updateScale();
     const observer = new ResizeObserver(updateScale);
     observer.observe(container);
-    window.addEventListener('resize', updateScale);
+    window.addEventListener("resize", updateScale);
     return () => {
       observer.disconnect();
-      window.removeEventListener('resize', updateScale);
+      window.removeEventListener("resize", updateScale);
     };
   }, [canvasHeight, canvasWidth, containerRef]);
 
@@ -310,10 +319,10 @@ function useCanvasScale(
 
 async function loadBackgroundFile(file: File): Promise<BackgroundImage> {
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error('仅支持 PNG、JPG、WebP 或 SVG 图片');
+    throw new Error("仅支持 PNG、JPG、WebP 或 SVG 图片");
   }
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error('图片不能超过 20 MB');
+    throw new Error("图片不能超过 20 MB");
   }
 
   const src = URL.createObjectURL(file);
@@ -329,25 +338,25 @@ async function loadBackgroundFile(file: File): Promise<BackgroundImage> {
     };
     image.onerror = () => {
       URL.revokeObjectURL(src);
-      reject(new Error('图片读取失败，请换一张图片重试'));
+      reject(new Error("图片读取失败，请换一张图片重试"));
     };
     image.src = src;
   });
 }
 
-function getStickerFormat(file: File): StickerAsset['format'] {
-  if (file.type === 'image/svg+xml') return 'SVG';
-  if (file.type === 'image/jpeg') return 'JPG';
-  if (file.type === 'image/webp') return 'WebP';
-  return 'PNG';
+function getStickerFormat(file: File): StickerAsset["format"] {
+  if (file.type === "image/svg+xml") return "SVG";
+  if (file.type === "image/jpeg") return "JPG";
+  if (file.type === "image/webp") return "WebP";
+  return "PNG";
 }
 
 async function loadCustomStickerFile(file: File): Promise<StickerAsset> {
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error('仅支持 PNG、JPG、WebP 或 SVG 图片');
+    throw new Error("仅支持 PNG、JPG、WebP 或 SVG 图片");
   }
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error('贴纸图片不能超过 20 MB');
+    throw new Error("贴纸图片不能超过 20 MB");
   }
 
   const src = URL.createObjectURL(file);
@@ -356,11 +365,11 @@ async function loadCustomStickerFile(file: File): Promise<StickerAsset> {
     image.onload = () => {
       if (!image.naturalWidth || !image.naturalHeight) {
         URL.revokeObjectURL(src);
-        reject(new Error('无法读取贴纸尺寸，请换一张图片重试'));
+        reject(new Error("无法读取贴纸尺寸，请换一张图片重试"));
         return;
       }
 
-      const name = file.name.replace(/\.[^.]+$/, '').trim() || '自定义贴纸';
+      const name = file.name.replace(/\.[^.]+$/, "").trim() || "自定义贴纸";
       resolve({
         id: `custom-${makeInstanceId()}`,
         name,
@@ -371,14 +380,14 @@ async function loadCustomStickerFile(file: File): Promise<StickerAsset> {
     };
     image.onerror = () => {
       URL.revokeObjectURL(src);
-      reject(new Error('贴纸图片读取失败，请换一张图片重试'));
+      reject(new Error("贴纸图片读取失败，请换一张图片重试"));
     };
     image.src = src;
   });
 }
 
 function makeInstanceId() {
-  return typeof crypto.randomUUID === 'function'
+  return typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
     : `sticker-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -431,8 +440,8 @@ function AdjustmentSlider({
   const valueText = suffix
     ? `${value}${suffix}`
     : value > 0
-      ? `+${value}`
-      : `${value}`;
+    ? `+${value}`
+    : `${value}`;
   return (
     <label className="adjustment-control">
       <span className="adjustment-label">
@@ -500,24 +509,31 @@ function ThrottledAdjustmentSlider({
     interactingRef.current = false;
   }, [applyPendingValue]);
 
-  const queueChange = useCallback((nextValue: number) => {
-    interactingRef.current = true;
-    pendingValueRef.current = nextValue;
-    setDraftValue(nextValue);
+  const queueChange = useCallback(
+    (nextValue: number) => {
+      interactingRef.current = true;
+      pendingValueRef.current = nextValue;
+      setDraftValue(nextValue);
 
-    const elapsed = performance.now() - lastAppliedAtRef.current;
-    if (elapsed >= EFFECT_SLIDER_THROTTLE_MS) {
-      applyPendingValue();
-    } else if (!throttleTimerRef.current) {
-      throttleTimerRef.current = window.setTimeout(
-        applyPendingValue,
-        EFFECT_SLIDER_THROTTLE_MS - elapsed,
+      const elapsed = performance.now() - lastAppliedAtRef.current;
+      if (elapsed >= EFFECT_SLIDER_THROTTLE_MS) {
+        applyPendingValue();
+      } else if (!throttleTimerRef.current) {
+        throttleTimerRef.current = window.setTimeout(
+          applyPendingValue,
+          EFFECT_SLIDER_THROTTLE_MS - elapsed
+        );
+      }
+
+      if (debounceTimerRef.current)
+        window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = window.setTimeout(
+        finishChange,
+        EFFECT_SLIDER_DEBOUNCE_MS
       );
-    }
-
-    if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = window.setTimeout(finishChange, EFFECT_SLIDER_DEBOUNCE_MS);
-  }, [applyPendingValue, finishChange]);
+    },
+    [applyPendingValue, finishChange]
+  );
 
   useEffect(() => {
     if (interactingRef.current) return;
@@ -525,17 +541,18 @@ function ThrottledAdjustmentSlider({
     lastAppliedValueRef.current = value;
   }, [value]);
 
-  useEffect(() => () => {
-    if (throttleTimerRef.current) window.clearTimeout(throttleTimerRef.current);
-    if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (throttleTimerRef.current)
+        window.clearTimeout(throttleTimerRef.current);
+      if (debounceTimerRef.current)
+        window.clearTimeout(debounceTimerRef.current);
+    },
+    []
+  );
 
   return (
-    <AdjustmentSlider
-      {...props}
-      value={draftValue}
-      onChange={queueChange}
-    />
+    <AdjustmentSlider {...props} value={draftValue} onChange={queueChange} />
   );
 }
 
@@ -548,20 +565,22 @@ interface StickerInspectorProps {
 }
 
 const FILL_COLOR_PRESETS = [
-  { kind: 'solid', label: '蓝色', value: '#096BC1', swatch: '#096BC1' },
-  { kind: 'solid', label: '白色', value: '#FFFFFF', swatch: '#FFFFFF' },
-  { kind: 'solid', label: '橙色', value: '#FFA011', swatch: '#FFA011' },
+  { kind: "solid", label: "蓝色", value: "#096BC1", swatch: "#096BC1" },
+  { kind: "solid", label: "白色", value: "#FFFFFF", swatch: "#FFFFFF" },
+  { kind: "solid", label: "橙色", value: "#FFA011", swatch: "#FFA011" },
   {
-    kind: 'variant',
-    label: '彩色一',
-    src: '/assets/stickers/orange-lettering-1.svg',
-    swatch: 'linear-gradient(135deg, #096BC1 0 50%, #FFC639 50% 75%, #4AB2F3 75%)',
+    kind: "variant",
+    label: "彩色一",
+    src: "/assets/stickers/orange-lettering-1.svg",
+    swatch:
+      "linear-gradient(135deg, #096BC1 0 50%, #FFC639 50% 75%, #4AB2F3 75%)",
   },
   {
-    kind: 'variant',
-    label: '彩色二',
-    src: '/assets/stickers/orange-lettering-2.svg',
-    swatch: 'conic-gradient(from 45deg, #FFA011 0 25%, #096BC1 25% 50%, #FFFFFF 50% 75%, #4AB2F3 75%)',
+    kind: "variant",
+    label: "彩色二",
+    src: "/assets/stickers/orange-lettering-2.svg",
+    swatch:
+      "conic-gradient(from 45deg, #FFA011 0 25%, #096BC1 25% 50%, #FFFFFF 50% 75%, #4AB2F3 75%)",
   },
 ] as const;
 const COLOR_THROTTLE_MS = 120;
@@ -572,9 +591,10 @@ function FillColorControl({
   onChange,
 }: {
   sticker: PlacedSticker;
-  onChange: (patch: Pick<PlacedSticker, 'fillColor' | 'variantSrc'>) => void;
+  onChange: (patch: Pick<PlacedSticker, "fillColor" | "variantSrc">) => void;
 }) {
-  const initialColor = sticker.fillColor ?? sticker.defaultFillColor ?? '#096BC1';
+  const initialColor =
+    sticker.fillColor ?? sticker.defaultFillColor ?? "#096BC1";
   const [draftColor, setDraftColor] = useState(initialColor);
   const onChangeRef = useRef(onChange);
   const pendingColorRef = useRef<string | null>(null);
@@ -594,7 +614,10 @@ function FillColorControl({
     }
     const nextColor = pendingColorRef.current;
     pendingColorRef.current = null;
-    if (!nextColor || (nextColor === lastAppliedColorRef.current && !activeVariantRef.current)) {
+    if (
+      !nextColor ||
+      (nextColor === lastAppliedColorRef.current && !activeVariantRef.current)
+    ) {
       return;
     }
     lastAppliedAtRef.current = performance.now();
@@ -612,24 +635,31 @@ function FillColorControl({
     interactingRef.current = false;
   }, [applyPendingColor]);
 
-  const queueColorChange = useCallback((nextColor: string) => {
-    interactingRef.current = true;
-    pendingColorRef.current = nextColor;
-    setDraftColor(nextColor);
+  const queueColorChange = useCallback(
+    (nextColor: string) => {
+      interactingRef.current = true;
+      pendingColorRef.current = nextColor;
+      setDraftColor(nextColor);
 
-    const elapsed = performance.now() - lastAppliedAtRef.current;
-    if (elapsed >= COLOR_THROTTLE_MS) {
-      applyPendingColor();
-    } else if (!throttleTimerRef.current) {
-      throttleTimerRef.current = window.setTimeout(
-        applyPendingColor,
-        COLOR_THROTTLE_MS - elapsed,
+      const elapsed = performance.now() - lastAppliedAtRef.current;
+      if (elapsed >= COLOR_THROTTLE_MS) {
+        applyPendingColor();
+      } else if (!throttleTimerRef.current) {
+        throttleTimerRef.current = window.setTimeout(
+          applyPendingColor,
+          COLOR_THROTTLE_MS - elapsed
+        );
+      }
+
+      if (debounceTimerRef.current)
+        window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = window.setTimeout(
+        finishColorChange,
+        COLOR_DEBOUNCE_MS
       );
-    }
-
-    if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = window.setTimeout(finishColorChange, COLOR_DEBOUNCE_MS);
-  }, [applyPendingColor, finishColorChange]);
+    },
+    [applyPendingColor, finishColorChange]
+  );
 
   const applyPreset = (nextColor: string) => {
     if (throttleTimerRef.current) window.clearTimeout(throttleTimerRef.current);
@@ -661,27 +691,40 @@ function FillColorControl({
 
   useEffect(() => {
     if (interactingRef.current) return;
-    const nextColor = sticker.fillColor ?? sticker.defaultFillColor ?? '#096BC1';
+    const nextColor =
+      sticker.fillColor ?? sticker.defaultFillColor ?? "#096BC1";
     setDraftColor(nextColor);
     lastAppliedColorRef.current = nextColor;
     activeVariantRef.current = sticker.variantSrc;
-  }, [sticker.defaultFillColor, sticker.fillColor, sticker.instanceId, sticker.variantSrc]);
+  }, [
+    sticker.defaultFillColor,
+    sticker.fillColor,
+    sticker.instanceId,
+    sticker.variantSrc,
+  ]);
 
-  useEffect(() => () => {
-    if (throttleTimerRef.current) window.clearTimeout(throttleTimerRef.current);
-    if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (throttleTimerRef.current)
+        window.clearTimeout(throttleTimerRef.current);
+      if (debounceTimerRef.current)
+        window.clearTimeout(debounceTimerRef.current);
+    },
+    []
+  );
 
   return (
     <div className="fill-color-control">
       <div className="fill-color-custom">
         <span className="adjustment-label">
           <span>填充颜色</span>
-          <output>{sticker.variantSrc ? '彩色预设' : draftColor.toUpperCase()}</output>
+          <output>
+            {sticker.variantSrc ? "彩色预设" : draftColor.toUpperCase()}
+          </output>
         </span>
         <div
           className="fill-color-picker"
-          style={{ '--fill-color': draftColor } as React.CSSProperties}
+          style={{ "--fill-color": draftColor } as React.CSSProperties}
         >
           <span className="fill-color-picker-icon" aria-hidden="true">
             <PencilSimple size="1em" weight="bold" />
@@ -701,24 +744,30 @@ function FillColorControl({
           {FILL_COLOR_PRESETS.map((preset) => (
             <button
               type="button"
-              key={preset.kind === 'solid' ? preset.value : preset.src}
-              className={`${preset.kind === 'variant' ? 'is-variant' : 'is-solid'}${
-                preset.kind === 'solid'
-                  ? !sticker.variantSrc && draftColor.toUpperCase() === preset.value
-                    ? ' is-active'
-                    : ''
+              key={preset.kind === "solid" ? preset.value : preset.src}
+              className={`${
+                preset.kind === "variant" ? "is-variant" : "is-solid"
+              }${
+                preset.kind === "solid"
+                  ? !sticker.variantSrc &&
+                    draftColor.toUpperCase() === preset.value
+                    ? " is-active"
+                    : ""
                   : sticker.variantSrc === preset.src
-                    ? ' is-active'
-                    : ''
+                  ? " is-active"
+                  : ""
               }`}
-              style={{ '--preset-color': preset.swatch } as React.CSSProperties}
-              onClick={() => (
-                preset.kind === 'solid' ? applyPreset(preset.value) : applyVariant(preset.src)
-              )}
+              style={{ "--preset-color": preset.swatch } as React.CSSProperties}
+              onClick={() =>
+                preset.kind === "solid"
+                  ? applyPreset(preset.value)
+                  : applyVariant(preset.src)
+              }
               aria-label={`使用${preset.label}`}
               aria-pressed={
-                preset.kind === 'solid'
-                  ? !sticker.variantSrc && draftColor.toUpperCase() === preset.value
+                preset.kind === "solid"
+                  ? !sticker.variantSrc &&
+                    draftColor.toUpperCase() === preset.value
                   : sticker.variantSrc === preset.src
               }
             >
@@ -782,7 +831,7 @@ function StickerInspector({
           <span className="adjustment-label">翻转</span>
           <div className="transform-actions" aria-label="贴纸翻转">
             <Button
-              className={sticker.flipX ? 'is-active' : undefined}
+              className={sticker.flipX ? "is-active" : undefined}
               size="small"
               icon={<FlipHorizontal size="1em" weight="bold" />}
               aria-pressed={sticker.flipX}
@@ -791,7 +840,7 @@ function StickerInspector({
               水平翻转
             </Button>
             <Button
-              className={sticker.flipY ? 'is-active' : undefined}
+              className={sticker.flipY ? "is-active" : undefined}
               size="small"
               icon={<FlipVertical size="1em" weight="bold" />}
               aria-pressed={sticker.flipY}
@@ -802,10 +851,7 @@ function StickerInspector({
           </div>
         </div>
         {sticker.defaultFillColor && (
-          <FillColorControl
-            sticker={sticker}
-            onChange={onUpdate}
-          />
+          <FillColorControl sticker={sticker} onChange={onUpdate} />
         )}
         <AdjustmentSlider
           label="色相"
@@ -849,7 +895,9 @@ function StickerInspector({
                 <input
                   type="color"
                   value={sticker.outlineColor}
-                  onChange={(event) => onUpdate({ outlineColor: event.target.value })}
+                  onChange={(event) =>
+                    onUpdate({ outlineColor: event.target.value })
+                  }
                   aria-label="白边颜色"
                 />
               </label>
@@ -880,7 +928,9 @@ function StickerInspector({
                 <input
                   type="color"
                   value={sticker.shadowColor}
-                  onChange={(event) => onUpdate({ shadowColor: event.target.value })}
+                  onChange={(event) =>
+                    onUpdate({ shadowColor: event.target.value })
+                  }
                   aria-label="阴影颜色"
                 />
               </label>
@@ -943,19 +993,25 @@ function StickerInspector({
         <Button
           size="small"
           icon={<ArrowCounterClockwise size="1em" weight="bold" />}
-          onClick={() => onUpdate({
-            hue: 0,
-            saturation: 0,
-            brightness: 0,
-            contrast: 0,
-            warmth: 0,
-            fillColor: sticker.defaultFillColor,
-            variantSrc: undefined,
-          })}
+          onClick={() =>
+            onUpdate({
+              hue: 0,
+              saturation: 0,
+              brightness: 0,
+              contrast: 0,
+              warmth: 0,
+              fillColor: sticker.defaultFillColor,
+              variantSrc: undefined,
+            })
+          }
         >
           重置调色
         </Button>
-        <Button size="small" icon={<Copy size="1em" weight="bold" />} onClick={onDuplicate}>
+        <Button
+          size="small"
+          icon={<Copy size="1em" weight="bold" />}
+          onClick={onDuplicate}
+        >
           复制
         </Button>
         <Button
@@ -979,10 +1035,10 @@ interface MobileStickerControlsProps {
 }
 
 const MOBILE_ADJUSTMENT_LABELS: Record<MobileAdjustmentSection, string> = {
-  color: '颜色',
-  transform: '变换',
-  outline: '白边',
-  shadow: '阴影',
+  color: "颜色",
+  transform: "变换",
+  outline: "白边",
+  shadow: "阴影",
 };
 
 function MobileStickerControls({
@@ -992,42 +1048,46 @@ function MobileStickerControls({
   onDelete,
   onClose,
 }: MobileStickerControlsProps) {
-  const [activeSection, setActiveSection] = useState<MobileAdjustmentSection | null>(null);
+  const [activeSection, setActiveSection] =
+    useState<MobileAdjustmentSection | null>(null);
   const closeSheetButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!activeSection) return;
 
     const handleSheetKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         setActiveSection(null);
       }
     };
 
-    document.addEventListener('keydown', handleSheetKeyDown, true);
-    const focusFrame = window.requestAnimationFrame(() => closeSheetButtonRef.current?.focus());
+    document.addEventListener("keydown", handleSheetKeyDown, true);
+    const focusFrame = window.requestAnimationFrame(() =>
+      closeSheetButtonRef.current?.focus()
+    );
 
     return () => {
       window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener('keydown', handleSheetKeyDown, true);
+      document.removeEventListener("keydown", handleSheetKeyDown, true);
     };
   }, [activeSection]);
 
-  const resetColor = () => onUpdate({
-    hue: 0,
-    saturation: 0,
-    brightness: 0,
-    contrast: 0,
-    warmth: 0,
-    fillColor: sticker.defaultFillColor,
-    variantSrc: undefined,
-  });
+  const resetColor = () =>
+    onUpdate({
+      hue: 0,
+      saturation: 0,
+      brightness: 0,
+      contrast: 0,
+      warmth: 0,
+      fillColor: sticker.defaultFillColor,
+      variantSrc: undefined,
+    });
 
   const renderSheetControls = () => {
     switch (activeSection) {
-      case 'color':
+      case "color":
         return (
           <div className="mobile-sheet-control-stack">
             {sticker.defaultFillColor && (
@@ -1073,14 +1133,14 @@ function MobileStickerControls({
             </div>
           </div>
         );
-      case 'transform':
+      case "transform":
         return (
           <div className="mobile-sheet-control-stack">
             <div className="transform-control">
               <span className="adjustment-label">翻转方向</span>
               <div className="transform-actions" aria-label="贴纸翻转">
                 <Button
-                  className={sticker.flipX ? 'is-active' : undefined}
+                  className={sticker.flipX ? "is-active" : undefined}
                   size="small"
                   icon={<FlipHorizontal size="1em" weight="bold" />}
                   aria-pressed={sticker.flipX}
@@ -1089,7 +1149,7 @@ function MobileStickerControls({
                   水平翻转
                 </Button>
                 <Button
-                  className={sticker.flipY ? 'is-active' : undefined}
+                  className={sticker.flipY ? "is-active" : undefined}
                   size="small"
                   icon={<FlipVertical size="1em" weight="bold" />}
                   aria-pressed={sticker.flipY}
@@ -1104,7 +1164,7 @@ function MobileStickerControls({
             </p>
           </div>
         );
-      case 'outline':
+      case "outline":
         return (
           <div className="mobile-sheet-control-stack">
             <EffectToggle
@@ -1119,7 +1179,9 @@ function MobileStickerControls({
                   <input
                     type="color"
                     value={sticker.outlineColor}
-                    onChange={(event) => onUpdate({ outlineColor: event.target.value })}
+                    onChange={(event) =>
+                      onUpdate({ outlineColor: event.target.value })
+                    }
                     aria-label="白边颜色"
                   />
                 </label>
@@ -1135,11 +1197,13 @@ function MobileStickerControls({
                 />
               </div>
             ) : (
-              <p className="mobile-effect-empty">开启后可以调整白边颜色和宽度。</p>
+              <p className="mobile-effect-empty">
+                开启后可以调整白边颜色和宽度。
+              </p>
             )}
           </div>
         );
-      case 'shadow':
+      case "shadow":
         return (
           <div className="mobile-sheet-control-stack">
             <EffectToggle
@@ -1154,7 +1218,9 @@ function MobileStickerControls({
                   <input
                     type="color"
                     value={sticker.shadowColor}
-                    onChange={(event) => onUpdate({ shadowColor: event.target.value })}
+                    onChange={(event) =>
+                      onUpdate({ shadowColor: event.target.value })
+                    }
                     aria-label="阴影颜色"
                   />
                 </label>
@@ -1210,7 +1276,9 @@ function MobileStickerControls({
                 />
               </div>
             ) : (
-              <p className="mobile-effect-empty">开启后可以调整阴影颜色、大小和位置。</p>
+              <p className="mobile-effect-empty">
+                开启后可以调整阴影颜色、大小和位置。
+              </p>
             )}
           </div>
         );
@@ -1231,26 +1299,26 @@ function MobileStickerControls({
           </button>
         </div>
         <div className="mobile-sticker-dock-actions">
-          <button type="button" onClick={() => setActiveSection('color')}>
+          <button type="button" onClick={() => setActiveSection("color")}>
             <Palette size="1.35em" weight="duotone" aria-hidden="true" />
             <span>颜色</span>
           </button>
-          <button type="button" onClick={() => setActiveSection('transform')}>
+          <button type="button" onClick={() => setActiveSection("transform")}>
             <BoundingBox size="1.35em" weight="duotone" aria-hidden="true" />
             <span>变换</span>
           </button>
           <button
             type="button"
-            className={sticker.outlineEnabled ? 'is-enabled' : undefined}
-            onClick={() => setActiveSection('outline')}
+            className={sticker.outlineEnabled ? "is-enabled" : undefined}
+            onClick={() => setActiveSection("outline")}
           >
             <Circle size="1.35em" weight="duotone" aria-hidden="true" />
             <span>白边</span>
           </button>
           <button
             type="button"
-            className={sticker.shadowEnabled ? 'is-enabled' : undefined}
-            onClick={() => setActiveSection('shadow')}
+            className={sticker.shadowEnabled ? "is-enabled" : undefined}
+            onClick={() => setActiveSection("shadow")}
           >
             <StackSimple size="1.35em" weight="duotone" aria-hidden="true" />
             <span>阴影</span>
@@ -1298,7 +1366,7 @@ function MobileStickerControls({
         </div>
       )}
     </>,
-    document.body,
+    document.body
   );
 }
 
@@ -1316,15 +1384,25 @@ function StickerLibrary({
   onUploadCustomSticker,
 }: StickerLibraryProps) {
   const customStickerInputRef = useRef<HTMLInputElement>(null);
-  const stickerAssets = [...customStickers, ...STICKER_ASSETS];
+  const [activeSource, setActiveSource] = useState<"official" | "fan">(
+    "official"
+  );
+  const stickerAssets = STICKER_ASSETS.filter(
+    (asset) =>
+      asset.source === "both" || (asset.source ?? "fan") === activeSource
+  );
   const renderStickerOption = (asset: StickerAsset) => (
     <button
-      className={`sticker-option${asset.id.startsWith('custom-') ? ' custom-sticker-option' : ''}`}
+      className={`sticker-option${
+        asset.id.startsWith("custom-") ? " custom-sticker-option" : ""
+      }`}
       type="button"
       key={asset.id}
       disabled={disabled}
       onClick={() => onAddSticker(asset)}
-      aria-label={`添加${asset.name}，${asset.format} 格式${asset.id === FIRST_RECOLORABLE_STICKER_ID ? '，支持换色' : ''}`}
+      aria-label={`添加${asset.name}，${asset.format} 格式${
+        asset.id === FIRST_RECOLORABLE_STICKER_ID ? "，支持换色" : ""
+      }`}
     >
       {asset.id === FIRST_RECOLORABLE_STICKER_ID && (
         <span className="sticker-color-badge" aria-hidden="true">
@@ -1339,7 +1417,35 @@ function StickerLibrary({
 
   return (
     <Card className="sticker-library" color="app-blue">
-      <strong className="library-title">贴纸</strong>
+      <div className="library-heading">
+        <strong className="library-title">贴纸</strong>
+        <div
+          className="sticker-source-tabs"
+          role="tablist"
+          aria-label="贴纸来源"
+        >
+          <button
+            className={activeSource === "official" ? "is-active" : undefined}
+            type="button"
+            role="tab"
+            aria-selected={activeSource === "official"}
+            aria-controls="sticker-list"
+            onClick={() => setActiveSource("official")}
+          >
+            官方
+          </button>
+          <button
+            className={activeSource === "fan" ? "is-active" : undefined}
+            type="button"
+            role="tab"
+            aria-selected={activeSource === "fan"}
+            aria-controls="sticker-list"
+            onClick={() => setActiveSource("fan")}
+          >
+            饭制
+          </button>
+        </div>
+      </div>
       <input
         ref={customStickerInputRef}
         className="visually-hidden"
@@ -1347,12 +1453,12 @@ function StickerLibrary({
         accept="image/png,image/jpeg,image/webp,image/svg+xml"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          event.target.value = '';
+          event.target.value = "";
           if (file) onUploadCustomSticker(file);
         }}
         aria-label="选择自定义贴纸"
       />
-      <div className="sticker-list" aria-label="贴纸列表">
+      <div id="sticker-list" className="sticker-list" aria-label="贴纸列表">
         <button
           className="sticker-option custom-sticker-upload"
           type="button"
@@ -1362,6 +1468,7 @@ function StickerLibrary({
           <UploadSimple size="1.65em" weight="duotone" aria-hidden="true" />
           <span>上传贴纸</span>
         </button>
+        {customStickers.map(renderStickerOption)}
         {stickerAssets.map(renderStickerOption)}
       </div>
       {disabled && <p className="library-hint">请先上传图片哦！</p>}
@@ -1369,7 +1476,13 @@ function StickerLibrary({
   );
 }
 
-function ToastNotice({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
+function ToastNotice({
+  toast,
+  onClose,
+}: {
+  toast: ToastState;
+  onClose: () => void;
+}) {
   const icon = {
     success: <CheckCircle size="1em" weight="fill" />,
     info: <Info size="1em" weight="fill" />,
@@ -1380,7 +1493,7 @@ function ToastNotice({ toast, onClose }: { toast: ToastState; onClose: () => voi
   return (
     <div
       className={`toast-notice toast-${toast.kind}`}
-      role={toast.kind === 'error' ? 'alert' : 'status'}
+      role={toast.kind === "error" ? "alert" : "status"}
       aria-live="polite"
     >
       <span className="toast-icon" aria-hidden="true">
@@ -1404,7 +1517,9 @@ export function StickerEditor() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
-  const [exportState, setExportState] = useState<ExportState>({ status: 'idle' });
+  const [exportState, setExportState] = useState<ExportState>({
+    status: "idle",
+  });
   const [toast, setToast] = useState<ToastState | null>(null);
   const isMobileLayout = useMobileLayout();
   const history = useStickerHistory();
@@ -1415,16 +1530,25 @@ export function StickerEditor() {
   const customStickerUrlsRef = useRef(new Set<string>());
   const canvasWidth = background?.width ?? DEFAULT_CANVAS_WIDTH;
   const canvasHeight = background?.height ?? DEFAULT_CANVAS_HEIGHT;
-  const displayScale = useCanvasScale(stageContainerRef, canvasWidth, canvasHeight);
+  const displayScale = useCanvasScale(
+    stageContainerRef,
+    canvasWidth,
+    canvasHeight
+  );
   const backgroundImage = useHtmlImage(background?.src);
 
   const showToast = useCallback(
-    (kind: ToastKind, message: string, description?: string, duration = 2600) => {
+    (
+      kind: ToastKind,
+      message: string,
+      description?: string,
+      duration = 2600
+    ) => {
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
       setToast({ kind, message, description });
       toastTimerRef.current = window.setTimeout(() => setToast(null), duration);
     },
-    [],
+    []
   );
 
   useEffect(() => {
@@ -1435,75 +1559,89 @@ export function StickerEditor() {
     };
   }, []);
 
-  const uploadCustomSticker = useCallback(async (file: File) => {
-    try {
-      const sticker = await loadCustomStickerFile(file);
-      customStickerUrlsRef.current.add(sticker.src);
-      setCustomStickers((current) => [sticker, ...current]);
-      showToast('success', '自定义贴纸已加入', `${sticker.name} 已放在贴纸栏最前面`, 2800);
-    } catch (error) {
-      showToast(
-        'error',
-        '无法添加这张贴纸',
-        error instanceof Error ? error.message : '请检查图片后重试',
-        3800,
-      );
-    }
-  }, [showToast]);
+  const uploadCustomSticker = useCallback(
+    async (file: File) => {
+      try {
+        const sticker = await loadCustomStickerFile(file);
+        customStickerUrlsRef.current.add(sticker.src);
+        setCustomStickers((current) => [sticker, ...current]);
+        showToast(
+          "success",
+          "自定义贴纸已加入",
+          `${sticker.name} 已放在贴纸栏最前面`,
+          2800
+        );
+      } catch (error) {
+        showToast(
+          "error",
+          "无法添加这张贴纸",
+          error instanceof Error ? error.message : "请检查图片后重试",
+          3800
+        );
+      }
+    },
+    [showToast]
+  );
 
   const selectedSticker = useMemo(
-    () => history.stickers.find((sticker) => sticker.instanceId === selectedId) ?? null,
-    [history.stickers, selectedId],
+    () =>
+      history.stickers.find((sticker) => sticker.instanceId === selectedId) ??
+      null,
+    [history.stickers, selectedId]
   );
 
   useEffect(() => {
     return () => {
-      if (background?.src.startsWith('blob:')) URL.revokeObjectURL(background.src);
+      if (background?.src.startsWith("blob:"))
+        URL.revokeObjectURL(background.src);
     };
   }, [background]);
 
   useEffect(() => {
-    if (exportState.status === 'idle') return;
+    if (exportState.status === "idle") return;
     const previousOverflow = document.body.style.overflow;
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && exportState.status !== 'generating') {
-        setExportState({ status: 'idle' });
+      if (event.key === "Escape" && exportState.status !== "generating") {
+        setExportState({ status: "idle" });
       }
     };
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleEscape);
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, [exportState.status]);
 
-  const handleFile = useCallback(async (file?: File) => {
-    if (!file) return;
-    try {
-      const nextBackground = await loadBackgroundFile(file);
-      history.reset();
-      setBackground(nextBackground);
-      setSelectedId(null);
-      showToast(
-        'success',
-        '图片已放进画布',
-        `${nextBackground.width} × ${nextBackground.height}px`,
-        2400,
-      );
-    } catch (error) {
-      showToast(
-        'error',
-        '无法上传这张图片',
-        error instanceof Error ? error.message : '请检查图片后重试',
-        3800,
-      );
-    }
-  }, [history, showToast]);
+  const handleFile = useCallback(
+    async (file?: File) => {
+      if (!file) return;
+      try {
+        const nextBackground = await loadBackgroundFile(file);
+        history.reset();
+        setBackground(nextBackground);
+        setSelectedId(null);
+        showToast(
+          "success",
+          "图片已放进画布",
+          `${nextBackground.width} × ${nextBackground.height}px`,
+          2400
+        );
+      } catch (error) {
+        showToast(
+          "error",
+          "无法上传这张图片",
+          error instanceof Error ? error.message : "请检查图片后重试",
+          3800
+        );
+      }
+    },
+    [history, showToast]
+  );
 
   const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
     void handleFile(event.target.files?.[0]);
-    event.target.value = '';
+    event.target.value = "";
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -1515,15 +1653,15 @@ export function StickerEditor() {
   const addSticker = useCallback(
     (asset: StickerAsset) => {
       if (!background) {
-        showToast('info', '先上传一张图片', '贴纸会添加到图片画布中央', 2400);
+        showToast("info", "先上传一张图片", "贴纸会添加到图片画布中央", 2400);
         return;
       }
 
       const offsetIndex = history.stickers.length % 5;
       const shortSide = Math.min(canvasWidth, canvasHeight);
       const baseSize = Math.max(8, shortSide * 0.26);
-      const size = asset.id === 'rocket' ? baseSize * 1.1 : baseSize;
-      const width = asset.id.endsWith('lettering')
+      const size = asset.id === "rocket" ? baseSize * 1.1 : baseSize;
+      const width = asset.id.endsWith("lettering")
         ? Math.min(canvasWidth * 0.72, baseSize * 2)
         : size;
       const height = width / (asset.aspectRatio ?? 1);
@@ -1546,10 +1684,10 @@ export function StickerEditor() {
         warmth: 0,
         fillColor: asset.defaultFillColor,
         outlineEnabled: false,
-        outlineColor: '#FFFFFF',
+        outlineColor: "#FFFFFF",
         outlineWidth: 10,
         shadowEnabled: false,
-        shadowColor: '#17365D',
+        shadowColor: "#17365D",
         shadowSize: 100,
         shadowBlur: 12,
         shadowOpacity: 32,
@@ -1563,34 +1701,36 @@ export function StickerEditor() {
         asset.id === FIRST_RECOLORABLE_STICKER_ID &&
         !window.sessionStorage.getItem(RECOLOR_HINT_SESSION_KEY)
       ) {
-        window.sessionStorage.setItem(RECOLOR_HINT_SESSION_KEY, '1');
+        window.sessionStorage.setItem(RECOLOR_HINT_SESSION_KEY, "1");
         showToast(
-          'info',
-          window.matchMedia('(max-width: 767px)').matches
-            ? '点一下底部的「颜色」就能修改配色哦！'
-            : '可以在调整面板中修改配色哦！',
+          "info",
+          window.matchMedia("(max-width: 767px)").matches
+            ? "点一下底部的「颜色」就能修改配色哦！"
+            : "可以在调整面板中修改配色哦！",
           undefined,
-          3200,
+          3200
         );
       }
     },
-    [background, canvasHeight, canvasWidth, history, showToast],
+    [background, canvasHeight, canvasWidth, history, showToast]
   );
 
   const updateSticker = useCallback(
     (instanceId: string, patch: Partial<PlacedSticker>) => {
       history.commit((current) =>
         current.map((sticker) =>
-          sticker.instanceId === instanceId ? { ...sticker, ...patch } : sticker,
-        ),
+          sticker.instanceId === instanceId ? { ...sticker, ...patch } : sticker
+        )
       );
     },
-    [history],
+    [history]
   );
 
   const deleteSelected = useCallback(() => {
     if (!selectedId) return;
-    history.commit((current) => current.filter((sticker) => sticker.instanceId !== selectedId));
+    history.commit((current) =>
+      current.filter((sticker) => sticker.instanceId !== selectedId)
+    );
     setSelectedId(null);
   }, [history, selectedId]);
 
@@ -1610,25 +1750,26 @@ export function StickerEditor() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (exportState.status !== 'idle') return;
+      if (exportState.status !== "idle") return;
       const target = event.target as HTMLElement | null;
-      if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+      if (target?.matches('input, textarea, select, [contenteditable="true"]'))
+        return;
 
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) history.redo();
         else history.undo();
         return;
       }
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId) {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedId) {
         event.preventDefault();
         deleteSelected();
       }
-      if (event.key === 'Escape') setSelectedId(null);
+      if (event.key === "Escape") setSelectedId(null);
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [deleteSelected, exportState.status, history, selectedId]);
 
   const clearEverything = () => {
@@ -1636,18 +1777,18 @@ export function StickerEditor() {
     setBackground(null);
     setSelectedId(null);
     setIsClearModalOpen(false);
-    showToast('success', '画布已清空', undefined, 2000);
+    showToast("success", "画布已清空", undefined, 2000);
   };
 
   const saveImage = async () => {
-    if (exportState.status === 'generating') return;
+    if (exportState.status === "generating") return;
     if (!background || !stageRef.current) {
-      showToast('warning', '请先上传图片再保存', undefined, 2400);
+      showToast("warning", "请先上传图片再保存", undefined, 2400);
       return;
     }
 
     const generationStartedAt = performance.now();
-    setExportState({ status: 'generating' });
+    setExportState({ status: "generating" });
     const previousSelection = selectedId;
     setSelectedId(null);
 
@@ -1671,18 +1812,22 @@ export function StickerEditor() {
           pixelRatio: 1,
         });
       } finally {
-        stage.size({ width: previousStage.width, height: previousStage.height });
+        stage.size({
+          width: previousStage.width,
+          height: previousStage.height,
+        });
         stage.scale({ x: previousStage.scaleX, y: previousStage.scaleY });
         stage.batchDraw();
       }
       const blob = await canvasToPngBlob(exportCanvas);
-      const fileBase = background.name.replace(/\.[^.]+$/, '').replace(/[^\w\u4e00-\u9fa5-]+/g, '-');
-      const fileName = `${fileBase || '安心院小姐的酸橙味照片'}-贴纸版.png`;
-      const file = new File([blob], fileName, { type: 'image/png' });
+      const fileBase = background.name
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^\w\u4e00-\u9fa5-]+/g, "-");
+      const fileName = `${fileBase || "安心院小姐的酸橙味照片"}-贴纸版.png`;
+      const file = new File([blob], fileName, { type: "image/png" });
       const previewUrl = await blobToDataUrl(blob);
-      const remainingDisplayTime = MIN_GENERATING_DISPLAY_MS - (
-        performance.now() - generationStartedAt
-      );
+      const remainingDisplayTime =
+        MIN_GENERATING_DISPLAY_MS - (performance.now() - generationStartedAt);
       if (remainingDisplayTime > 0) {
         await new Promise<void>((resolve) => {
           window.setTimeout(resolve, remainingDisplayTime);
@@ -1693,36 +1838,38 @@ export function StickerEditor() {
         // Mobile Safari and some in-app browsers can display a blob URL but
         // save an empty/gray image from the long-press menu. A self-contained
         // PNG data URL keeps the actual bytes available to that save flow.
-        setExportState({ status: 'ready', image: { file, url: previewUrl } });
+        setExportState({ status: "ready", image: { file, url: previewUrl } });
         return;
       }
 
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.download = fileName;
       link.href = url;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setExportState({ status: 'ready', image: { file, url: previewUrl } });
-      showToast('success', '已开始下载', '正在导出原图尺寸的 PNG', 2500);
+      setExportState({ status: "ready", image: { file, url: previewUrl } });
+      showToast("success", "已开始下载", "正在导出原图尺寸的 PNG", 2500);
     } catch (error) {
       setExportState({
-        status: 'error',
-        message: error instanceof Error
-          ? error.message
-          : '请稍后重试，或换一张尺寸更小的图片',
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "请稍后重试，或换一张尺寸更小的图片",
       });
     } finally {
       setSelectedId(previousSelection);
     }
   };
 
-  const exportedImage = exportState.status === 'ready' ? exportState.image : null;
-  const isSaving = exportState.status === 'generating';
+  const exportedImage =
+    exportState.status === "ready" ? exportState.image : null;
+  const isSaving = exportState.status === "generating";
   const canShareExportedImage = Boolean(
-    exportedImage && canShareFile(exportedImage.file),
+    exportedImage && canShareFile(exportedImage.file)
   );
 
   const shareExportedImage = async () => {
@@ -1731,13 +1878,18 @@ export function StickerEditor() {
     try {
       await navigator.share({
         files: [exportedImage.file],
-        title: '保存图片',
+        title: "保存图片",
       });
-      setExportState({ status: 'idle' });
-      showToast('success', '图片已交给系统处理', '可在分享面板中保存到相册或文件', 2800);
+      setExportState({ status: "idle" });
+      showToast(
+        "success",
+        "图片已交给系统处理",
+        "可在分享面板中保存到相册或文件",
+        2800
+      );
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        showToast('warning', '系统分享没有打开', '请长按图片保存', 3800);
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        showToast("warning", "系统分享没有打开", "请长按图片保存", 3800);
       }
     } finally {
       setIsSharing(false);
@@ -1747,7 +1899,7 @@ export function StickerEditor() {
   const downloadExportedImage = () => {
     if (!exportedImage) return;
     const url = URL.createObjectURL(exportedImage.file);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.download = exportedImage.file.name;
     link.href = url;
     document.body.appendChild(link);
@@ -1778,23 +1930,35 @@ export function StickerEditor() {
             size="large"
             icon={<UploadSimple size="1em" weight="bold" />}
             onClick={() => fileInputRef.current?.click()}
-            aria-label={background ? '换张图片' : '上传图片'}
+            aria-label={background ? "换张图片" : "上传图片"}
           >
-            <CanvasButtonLabel text={background ? '换张图片' : '上传图片'} />
+            <CanvasButtonLabel text={background ? "换张图片" : "上传图片"} />
           </Button>
           {background && (
             <span className="editing-hint">
-              <SlidersHorizontal size="1em" weight="duotone" aria-hidden="true" />
+              <SlidersHorizontal
+                size="1em"
+                weight="duotone"
+                aria-hidden="true"
+              />
               <span>选中贴纸后就可以拖动、旋转甚至调色啦！</span>
             </span>
           )}
         </div>
 
         <div className="history-actions" aria-label="历史操作">
-          <IconAction label="撤销 Ctrl+Z" disabled={!history.canUndo} onClick={history.undo}>
+          <IconAction
+            label="撤销 Ctrl+Z"
+            disabled={!history.canUndo}
+            onClick={history.undo}
+          >
             <ArrowCounterClockwise size="1em" weight="bold" />
           </IconAction>
-          <IconAction label="重做 Ctrl+Shift+Z" disabled={!history.canRedo} onClick={history.redo}>
+          <IconAction
+            label="重做 Ctrl+Shift+Z"
+            disabled={!history.canRedo}
+            onClick={history.redo}
+          >
             <ArrowClockwise size="1em" weight="bold" />
           </IconAction>
         </div>
@@ -1810,14 +1974,20 @@ export function StickerEditor() {
 
         <div className="canvas-column">
           <div
-            className={`canvas-frame${isDraggingFile ? ' is-dragging-file' : ''}`}
+            className={`canvas-frame${
+              isDraggingFile ? " is-dragging-file" : ""
+            }`}
             onDragEnter={(event) => {
               event.preventDefault();
               setIsDraggingFile(true);
             }}
             onDragOver={(event) => event.preventDefault()}
             onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              if (
+                !event.currentTarget.contains(
+                  event.relatedTarget as Node | null
+                )
+              ) {
                 setIsDraggingFile(false);
               }
             }}
@@ -1826,7 +1996,10 @@ export function StickerEditor() {
             <div className="stage-container" ref={stageContainerRef}>
               <div
                 className="stage-size"
-                style={{ width: canvasWidth * displayScale, height: canvasHeight * displayScale }}
+                style={{
+                  width: canvasWidth * displayScale,
+                  height: canvasHeight * displayScale,
+                }}
               >
                 <Stage
                   ref={stageRef}
@@ -1835,10 +2008,12 @@ export function StickerEditor() {
                   scaleX={displayScale}
                   scaleY={displayScale}
                   onMouseDown={(event) => {
-                    if (event.target === event.target.getStage()) setSelectedId(null);
+                    if (event.target === event.target.getStage())
+                      setSelectedId(null);
                   }}
                   onTouchStart={(event) => {
-                    if (event.target === event.target.getStage()) setSelectedId(null);
+                    if (event.target === event.target.getStage())
+                      setSelectedId(null);
                   }}
                 >
                   <Layer>
@@ -1910,29 +2085,35 @@ export function StickerEditor() {
           {selectedSticker && !isMobileLayout && (
             <StickerInspector
               sticker={selectedSticker}
-              onUpdate={(patch) => updateSticker(selectedSticker.instanceId, patch)}
+              onUpdate={(patch) =>
+                updateSticker(selectedSticker.instanceId, patch)
+              }
               onDuplicate={duplicateSelected}
               onDelete={deleteSelected}
               onClose={() => setSelectedId(null)}
             />
           )}
 
-          {selectedSticker && isMobileLayout && !isClearModalOpen && exportState.status === 'idle' && (
-            <MobileStickerControls
-              key={selectedSticker.instanceId}
-              sticker={selectedSticker}
-              onUpdate={(patch) => updateSticker(selectedSticker.instanceId, patch)}
-              onDuplicate={duplicateSelected}
-              onDelete={deleteSelected}
-              onClose={() => setSelectedId(null)}
-            />
-          )}
+          {selectedSticker &&
+            isMobileLayout &&
+            !isClearModalOpen &&
+            exportState.status === "idle" && (
+              <MobileStickerControls
+                key={selectedSticker.instanceId}
+                sticker={selectedSticker}
+                onUpdate={(patch) =>
+                  updateSticker(selectedSticker.instanceId, patch)
+                }
+                onDuplicate={duplicateSelected}
+                onDelete={deleteSelected}
+                onClose={() => setSelectedId(null)}
+              />
+            )}
         </div>
       </div>
 
       <div className="bottom-toolbar">
-        <div className="bottom-copy">
-        </div>
+        <div className="bottom-copy"></div>
         <div className="bottom-actions">
           <Button
             className="clear-button"
@@ -1980,16 +2161,16 @@ export function StickerEditor() {
         上传的图片和所有贴纸都会从当前画布移除。已下载的图片不会受到影响。
       </Modal>
 
-      {exportState.status !== 'idle' &&
+      {exportState.status !== "idle" &&
         createPortal(
           <div
             className="save-preview-mask"
             onClick={(event) => {
               if (
-                exportState.status !== 'generating' &&
+                exportState.status !== "generating" &&
                 event.target === event.currentTarget
               ) {
-                setExportState({ status: 'idle' });
+                setExportState({ status: "idle" });
               }
             }}
           >
@@ -1997,11 +2178,19 @@ export function StickerEditor() {
               className={`save-preview-dialog is-export-${exportState.status}`}
               role="dialog"
               aria-modal="true"
-              aria-label={exportState.status === 'generating' ? '正在生成 PNG 图片' : '保存 PNG 图片'}
-              aria-busy={exportState.status === 'generating'}
+              aria-label={
+                exportState.status === "generating"
+                  ? "正在生成 PNG 图片"
+                  : "保存 PNG 图片"
+              }
+              aria-busy={exportState.status === "generating"}
             >
-              {exportState.status === 'generating' && (
-                <div className="export-generating" role="status" aria-live="polite">
+              {exportState.status === "generating" && (
+                <div
+                  className="export-generating"
+                  role="status"
+                  aria-live="polite"
+                >
                   <img
                     className="export-generating-mascot"
                     src="/orange-angelina.svg"
@@ -2014,7 +2203,7 @@ export function StickerEditor() {
                 </div>
               )}
 
-              {exportState.status === 'ready' && (
+              {exportState.status === "ready" && (
                 <>
                   <div className="save-preview-image-wrap">
                     <img
@@ -2024,7 +2213,9 @@ export function StickerEditor() {
                     />
                   </div>
                   <p className="save-preview-instructions">
-                    图片已经生成<br />可以长按图片保存，或使用下面的按钮
+                    图片已经生成
+                    <br />
+                    可以长按图片保存，或使用下面的按钮
                   </p>
                   <div className="save-preview-actions">
                     {canShareExportedImage && (
@@ -2045,16 +2236,20 @@ export function StickerEditor() {
                     >
                       下载图片
                     </Button>
-                    <Button onClick={() => setExportState({ status: 'idle' })}>
+                    <Button onClick={() => setExportState({ status: "idle" })}>
                       完成
                     </Button>
                   </div>
                 </>
               )}
 
-              {exportState.status === 'error' && (
+              {exportState.status === "error" && (
                 <div className="export-error" role="alert">
-                  <WarningCircle size="2.6em" weight="fill" aria-hidden="true" />
+                  <WarningCircle
+                    size="2.6em"
+                    weight="fill"
+                    aria-hidden="true"
+                  />
                   <strong>图片生成失败</strong>
                   <p>{exportState.message}</p>
                   <div className="save-preview-actions">
@@ -2066,9 +2261,7 @@ export function StickerEditor() {
                     >
                       重新生成
                     </Button>
-                    <Button
-                      onClick={() => setExportState({ status: 'idle' })}
-                    >
+                    <Button onClick={() => setExportState({ status: "idle" })}>
                       返回编辑
                     </Button>
                   </div>
@@ -2076,7 +2269,7 @@ export function StickerEditor() {
               )}
             </div>
           </div>,
-          document.body,
+          document.body
         )}
     </section>
   );
