@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import Konva from 'konva';
 import { Circle, Group, Image as KonvaImage, Path, Transformer } from 'react-konva';
 import type { PlacedSticker } from '../types';
+import { useGifCanvas } from '../hooks/useGifCanvas';
 import { useHtmlImage } from '../hooks/useHtmlImage';
 
 interface StickerNodeProps {
@@ -135,11 +136,6 @@ export function StickerNode({
   onSelect,
   onChange,
 }: StickerNodeProps) {
-  const usesVectorFill = sticker.format === 'SVG' && !sticker.variantSrc;
-  const image = useHtmlImage(
-    sticker.variantSrc ?? sticker.src,
-    usesVectorFill ? sticker.fillColor : undefined,
-  );
   const imageRef = useRef<Konva.Image>(null);
   const transformNodeRef = useRef<Konva.Group>(null);
   const shadowRef = useRef<Konva.Image>(null);
@@ -147,6 +143,20 @@ export function StickerNode({
   const transformerRef = useRef<Konva.Transformer>(null);
   const rotateBadgeRef = useRef<Konva.Group>(null);
   const resizeBadgeRef = useRef<Konva.Group>(null);
+  const redrawGifFrame = useCallback(() => {
+    imageRef.current?.getLayer()?.batchDraw();
+  }, []);
+  const usesVectorFill = sticker.format === 'SVG' && !sticker.variantSrc;
+  const htmlImage = useHtmlImage(
+    sticker.format === 'GIF' ? undefined : (sticker.variantSrc ?? sticker.src),
+    usesVectorFill ? sticker.fillColor : undefined,
+  );
+  const gifCanvas = useGifCanvas(
+    sticker.format === 'GIF' ? sticker.src : undefined,
+    sticker.instanceId,
+    redrawGifFrame,
+  );
+  const image = gifCanvas ?? htmlImage;
   const fillRgb = usesVectorFill ? null : hexToRgb(sticker.fillColor);
   const outlineRgb = hexToRgb(sticker.outlineColor) ?? { red: 255, green: 255, blue: 255 };
   const shadowScale = Math.max(0.5, Math.min(1.5, (sticker.shadowSize ?? 100) / 100));
