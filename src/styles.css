@@ -811,6 +811,18 @@ input:focus-visible {
   gap: 11px;
 }
 
+.gif-effects-disabled-note {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--ink-soft);
+  background: rgb(255 255 255 / 58%);
+  border: 1px dashed rgb(200 112 0 / 32%);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .adjustment-control {
   display: grid;
   gap: 5px;
