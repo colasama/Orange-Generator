@@ -1316,7 +1316,7 @@ function StickerLibrary({
   onUploadCustomSticker,
 }: StickerLibraryProps) {
   const customStickerInputRef = useRef<HTMLInputElement>(null);
-  const remainingStickerAssets = [...customStickers.slice(1), ...STICKER_ASSETS];
+  const stickerAssets = [...customStickers, ...STICKER_ASSETS];
   const renderStickerOption = (asset: StickerAsset) => (
     <button
       className={`sticker-option${asset.id.startsWith('custom-') ? ' custom-sticker-option' : ''}`}
@@ -1353,7 +1353,6 @@ function StickerLibrary({
         aria-label="选择自定义贴纸"
       />
       <div className="sticker-list" aria-label="贴纸列表">
-        {customStickers[0] && renderStickerOption(customStickers[0])}
         <button
           className="sticker-option custom-sticker-upload"
           type="button"
@@ -1363,7 +1362,7 @@ function StickerLibrary({
           <UploadSimple size="1.65em" weight="duotone" aria-hidden="true" />
           <span>上传贴纸</span>
         </button>
-        {remainingStickerAssets.map(renderStickerOption)}
+        {stickerAssets.map(renderStickerOption)}
       </div>
       {disabled && <p className="library-hint">请先上传图片哦！</p>}
     </Card>
