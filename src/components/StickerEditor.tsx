@@ -816,6 +816,8 @@ function StickerInspector({
   onDelete,
   onClose,
 }: StickerInspectorProps) {
+  const supportsVisualEffects = sticker.format !== "GIF";
+
   return (
     <Card className="inspector-panel" color="app-yellow">
       <div className="inspector-heading">
@@ -857,163 +859,173 @@ function StickerInspector({
             </Button>
           </div>
         </div>
-        {sticker.defaultFillColor && (
-          <FillColorControl sticker={sticker} onChange={onUpdate} />
+        {supportsVisualEffects ? (
+          <>
+            {sticker.defaultFillColor && (
+              <FillColorControl sticker={sticker} onChange={onUpdate} />
+            )}
+            <AdjustmentSlider
+              label="色相"
+              value={sticker.hue}
+              min={-180}
+              max={180}
+              suffix="°"
+              onChange={(hue) => onUpdate({ hue })}
+            />
+            <AdjustmentSlider
+              label="饱和度"
+              value={sticker.saturation}
+              onChange={(saturation) => onUpdate({ saturation })}
+            />
+            <AdjustmentSlider
+              label="明度"
+              value={sticker.brightness}
+              onChange={(brightness) => onUpdate({ brightness })}
+            />
+            <AdjustmentSlider
+              label="对比度"
+              value={sticker.contrast}
+              onChange={(contrast) => onUpdate({ contrast })}
+            />
+            <AdjustmentSlider
+              label="白平衡"
+              value={sticker.warmth}
+              onChange={(warmth) => onUpdate({ warmth })}
+            />
+
+            <div className="effect-panel">
+              <EffectToggle
+                label="白边"
+                checked={sticker.outlineEnabled}
+                onChange={(outlineEnabled) => onUpdate({ outlineEnabled })}
+              />
+              {sticker.outlineEnabled && (
+                <div className="effect-controls">
+                  <label className="effect-color-control">
+                    <span>边缘颜色</span>
+                    <input
+                      type="color"
+                      value={sticker.outlineColor}
+                      onChange={(event) =>
+                        onUpdate({ outlineColor: event.target.value })
+                      }
+                      aria-label="白边颜色"
+                    />
+                  </label>
+                  <ThrottledAdjustmentSlider
+                    label="白边宽度"
+                    value={sticker.outlineWidth}
+                    min={1}
+                    max={40}
+                    suffix="px"
+                    leftHint="细"
+                    rightHint="粗"
+                    onChange={(outlineWidth) => onUpdate({ outlineWidth })}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="effect-panel">
+              <EffectToggle
+                label="阴影"
+                checked={sticker.shadowEnabled}
+                onChange={(shadowEnabled) => onUpdate({ shadowEnabled })}
+              />
+              {sticker.shadowEnabled && (
+                <div className="effect-controls">
+                  <label className="effect-color-control">
+                    <span>阴影颜色</span>
+                    <input
+                      type="color"
+                      value={sticker.shadowColor}
+                      onChange={(event) =>
+                        onUpdate({ shadowColor: event.target.value })
+                      }
+                      aria-label="阴影颜色"
+                    />
+                  </label>
+                  <ThrottledAdjustmentSlider
+                    label="阴影大小"
+                    value={sticker.shadowSize}
+                    min={50}
+                    max={150}
+                    suffix="%"
+                    leftHint="小"
+                    rightHint="大"
+                    onChange={(shadowSize) => onUpdate({ shadowSize })}
+                  />
+                  <ThrottledAdjustmentSlider
+                    label="模糊"
+                    value={sticker.shadowBlur}
+                    min={0}
+                    max={100}
+                    suffix="px"
+                    leftHint="清晰"
+                    rightHint="柔和"
+                    onChange={(shadowBlur) => onUpdate({ shadowBlur })}
+                  />
+                  <ThrottledAdjustmentSlider
+                    label="透明度"
+                    value={sticker.shadowOpacity}
+                    min={0}
+                    max={100}
+                    suffix="%"
+                    leftHint="透明"
+                    rightHint="实"
+                    onChange={(shadowOpacity) => onUpdate({ shadowOpacity })}
+                  />
+                  <ThrottledAdjustmentSlider
+                    label="水平偏移"
+                    value={sticker.shadowOffsetX}
+                    min={-40}
+                    max={40}
+                    suffix="px"
+                    leftHint="左"
+                    rightHint="右"
+                    onChange={(shadowOffsetX) => onUpdate({ shadowOffsetX })}
+                  />
+                  <ThrottledAdjustmentSlider
+                    label="垂直偏移"
+                    value={sticker.shadowOffsetY}
+                    min={-40}
+                    max={40}
+                    suffix="px"
+                    leftHint="上"
+                    rightHint="下"
+                    onChange={(shadowOffsetY) => onUpdate({ shadowOffsetY })}
+                  />
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="gif-effects-disabled-note">
+            GIF 贴纸不支持颜色、白边和阴影调整。
+          </p>
         )}
-        <AdjustmentSlider
-          label="色相"
-          value={sticker.hue}
-          min={-180}
-          max={180}
-          suffix="°"
-          onChange={(hue) => onUpdate({ hue })}
-        />
-        <AdjustmentSlider
-          label="饱和度"
-          value={sticker.saturation}
-          onChange={(saturation) => onUpdate({ saturation })}
-        />
-        <AdjustmentSlider
-          label="明度"
-          value={sticker.brightness}
-          onChange={(brightness) => onUpdate({ brightness })}
-        />
-        <AdjustmentSlider
-          label="对比度"
-          value={sticker.contrast}
-          onChange={(contrast) => onUpdate({ contrast })}
-        />
-        <AdjustmentSlider
-          label="白平衡"
-          value={sticker.warmth}
-          onChange={(warmth) => onUpdate({ warmth })}
-        />
-
-        <div className="effect-panel">
-          <EffectToggle
-            label="白边"
-            checked={sticker.outlineEnabled}
-            onChange={(outlineEnabled) => onUpdate({ outlineEnabled })}
-          />
-          {sticker.outlineEnabled && (
-            <div className="effect-controls">
-              <label className="effect-color-control">
-                <span>边缘颜色</span>
-                <input
-                  type="color"
-                  value={sticker.outlineColor}
-                  onChange={(event) =>
-                    onUpdate({ outlineColor: event.target.value })
-                  }
-                  aria-label="白边颜色"
-                />
-              </label>
-              <ThrottledAdjustmentSlider
-                label="白边宽度"
-                value={sticker.outlineWidth}
-                min={1}
-                max={40}
-                suffix="px"
-                leftHint="细"
-                rightHint="粗"
-                onChange={(outlineWidth) => onUpdate({ outlineWidth })}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="effect-panel">
-          <EffectToggle
-            label="阴影"
-            checked={sticker.shadowEnabled}
-            onChange={(shadowEnabled) => onUpdate({ shadowEnabled })}
-          />
-          {sticker.shadowEnabled && (
-            <div className="effect-controls">
-              <label className="effect-color-control">
-                <span>阴影颜色</span>
-                <input
-                  type="color"
-                  value={sticker.shadowColor}
-                  onChange={(event) =>
-                    onUpdate({ shadowColor: event.target.value })
-                  }
-                  aria-label="阴影颜色"
-                />
-              </label>
-              <ThrottledAdjustmentSlider
-                label="阴影大小"
-                value={sticker.shadowSize}
-                min={50}
-                max={150}
-                suffix="%"
-                leftHint="小"
-                rightHint="大"
-                onChange={(shadowSize) => onUpdate({ shadowSize })}
-              />
-              <ThrottledAdjustmentSlider
-                label="模糊"
-                value={sticker.shadowBlur}
-                min={0}
-                max={100}
-                suffix="px"
-                leftHint="清晰"
-                rightHint="柔和"
-                onChange={(shadowBlur) => onUpdate({ shadowBlur })}
-              />
-              <ThrottledAdjustmentSlider
-                label="透明度"
-                value={sticker.shadowOpacity}
-                min={0}
-                max={100}
-                suffix="%"
-                leftHint="透明"
-                rightHint="实"
-                onChange={(shadowOpacity) => onUpdate({ shadowOpacity })}
-              />
-              <ThrottledAdjustmentSlider
-                label="水平偏移"
-                value={sticker.shadowOffsetX}
-                min={-40}
-                max={40}
-                suffix="px"
-                leftHint="左"
-                rightHint="右"
-                onChange={(shadowOffsetX) => onUpdate({ shadowOffsetX })}
-              />
-              <ThrottledAdjustmentSlider
-                label="垂直偏移"
-                value={sticker.shadowOffsetY}
-                min={-40}
-                max={40}
-                suffix="px"
-                leftHint="上"
-                rightHint="下"
-                onChange={(shadowOffsetY) => onUpdate({ shadowOffsetY })}
-              />
-            </div>
-          )}
-        </div>
       </div>
 
       <div className="inspector-actions">
-        <Button
-          size="small"
-          icon={<ArrowCounterClockwise size="1em" weight="bold" />}
-          onClick={() =>
-            onUpdate({
-              hue: 0,
-              saturation: 0,
-              brightness: 0,
-              contrast: 0,
-              warmth: 0,
-              fillColor: sticker.defaultFillColor,
-              variantSrc: undefined,
-            })
-          }
-        >
-          重置调色
-        </Button>
+        {supportsVisualEffects && (
+          <Button
+            size="small"
+            icon={<ArrowCounterClockwise size="1em" weight="bold" />}
+            onClick={() =>
+              onUpdate({
+                hue: 0,
+                saturation: 0,
+                brightness: 0,
+                contrast: 0,
+                warmth: 0,
+                fillColor: sticker.defaultFillColor,
+                variantSrc: undefined,
+              })
+            }
+          >
+            重置调色
+          </Button>
+        )}
         <Button
           size="small"
           icon={<Copy size="1em" weight="bold" />}
@@ -1058,6 +1070,17 @@ function MobileStickerControls({
   const [activeSection, setActiveSection] =
     useState<MobileAdjustmentSection | null>(null);
   const closeSheetButtonRef = useRef<HTMLButtonElement>(null);
+  const supportsVisualEffects = sticker.format !== "GIF";
+
+  useEffect(() => {
+    if (
+      !supportsVisualEffects &&
+      activeSection &&
+      activeSection !== "transform"
+    ) {
+      setActiveSection(null);
+    }
+  }, [activeSection, supportsVisualEffects]);
 
   useEffect(() => {
     if (!activeSection) return;
@@ -1093,6 +1116,8 @@ function MobileStickerControls({
     });
 
   const renderSheetControls = () => {
+    if (!supportsVisualEffects && activeSection !== "transform") return null;
+
     switch (activeSection) {
       case "color":
         return (
@@ -1306,30 +1331,36 @@ function MobileStickerControls({
           </button>
         </div>
         <div className="mobile-sticker-dock-actions">
-          <button type="button" onClick={() => setActiveSection("color")}>
-            <Palette size="1.35em" weight="duotone" aria-hidden="true" />
-            <span>颜色</span>
-          </button>
+          {supportsVisualEffects && (
+            <button type="button" onClick={() => setActiveSection("color")}>
+              <Palette size="1.35em" weight="duotone" aria-hidden="true" />
+              <span>颜色</span>
+            </button>
+          )}
           <button type="button" onClick={() => setActiveSection("transform")}>
             <BoundingBox size="1.35em" weight="duotone" aria-hidden="true" />
             <span>变换</span>
           </button>
-          <button
-            type="button"
-            className={sticker.outlineEnabled ? "is-enabled" : undefined}
-            onClick={() => setActiveSection("outline")}
-          >
-            <Circle size="1.35em" weight="duotone" aria-hidden="true" />
-            <span>白边</span>
-          </button>
-          <button
-            type="button"
-            className={sticker.shadowEnabled ? "is-enabled" : undefined}
-            onClick={() => setActiveSection("shadow")}
-          >
-            <StackSimple size="1.35em" weight="duotone" aria-hidden="true" />
-            <span>阴影</span>
-          </button>
+          {supportsVisualEffects && (
+            <>
+              <button
+                type="button"
+                className={sticker.outlineEnabled ? "is-enabled" : undefined}
+                onClick={() => setActiveSection("outline")}
+              >
+                <Circle size="1.35em" weight="duotone" aria-hidden="true" />
+                <span>白边</span>
+              </button>
+              <button
+                type="button"
+                className={sticker.shadowEnabled ? "is-enabled" : undefined}
+                onClick={() => setActiveSection("shadow")}
+              >
+                <StackSimple size="1.35em" weight="duotone" aria-hidden="true" />
+                <span>阴影</span>
+              </button>
+            </>
+          )}
           <span className="mobile-dock-divider" aria-hidden="true" />
           <button type="button" onClick={onDuplicate}>
             <Copy size="1.35em" weight="duotone" aria-hidden="true" />

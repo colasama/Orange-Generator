@@ -157,16 +157,18 @@ export function StickerNode({
     redrawGifFrame,
   );
   const image = gifCanvas ?? htmlImage;
+  const supportsVisualEffects = sticker.format !== 'GIF';
   const fillRgb = usesVectorFill ? null : hexToRgb(sticker.fillColor);
   const outlineRgb = hexToRgb(sticker.outlineColor) ?? { red: 255, green: 255, blue: 255 };
   const shadowScale = Math.max(0.5, Math.min(1.5, (sticker.shadowSize ?? 100) / 100));
   const hasActiveFilters =
-    Boolean(fillRgb) ||
-    sticker.hue !== 0 ||
-    sticker.saturation !== 0 ||
-    sticker.brightness !== 0 ||
-    sticker.contrast !== 0 ||
-    sticker.warmth !== 0;
+    supportsVisualEffects &&
+    (Boolean(fillRgb) ||
+      sticker.hue !== 0 ||
+      sticker.saturation !== 0 ||
+      sticker.brightness !== 0 ||
+      sticker.contrast !== 0 ||
+      sticker.warmth !== 0);
   const compactControls = displayScale * Math.min(canvasWidth, canvasHeight) < 420;
   // Konva.Transformer ignores its parent's scale, so its sizes are already in
   // screen pixels. The custom badges are regular canvas nodes and need the
@@ -354,7 +356,7 @@ export function StickerNode({
 
   return (
     <>
-      {sticker.shadowEnabled && (
+      {supportsVisualEffects && sticker.shadowEnabled && (
         <KonvaImage
           ref={shadowRef}
           image={image}
@@ -372,7 +374,7 @@ export function StickerNode({
           listening={false}
         />
       )}
-      {sticker.outlineEnabled && (
+      {supportsVisualEffects && sticker.outlineEnabled && (
         <KonvaImage
           ref={outlineRef}
           image={image}
