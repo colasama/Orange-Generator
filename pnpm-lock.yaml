@@ -23,6 +23,9 @@ importers:
       gifuct-js:
         specifier: ^2.1.2
         version: 2.1.2
+      jpeg-js:
+        specifier: ^0.4.4
+        version: 0.4.4
       konva:
         specifier: ^10.3.0
         version: 10.3.0
@@ -395,6 +398,9 @@ packages:
     peerDependencies:
       react: ^19.0.0
 
+  jpeg-js@0.4.4:
+    resolution: {integrity: sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg==}
+
   js-binary-schema-parser@2.0.3:
     resolution: {integrity: sha512-xezGJmOb4lk/M1ZZLTR/jaBHQ4gG/lqQnJqdIv4721DMggsa1bDVlHXNeHYogaIEHD9vCRv0fcL4hMA+Coarkg==}
 
@@ -740,6 +746,8 @@ snapshots:
       react: 19.2.8
     transitivePeerDependencies:
       - '@types/react'
+
+  jpeg-js@0.4.4: {}
 
   js-binary-schema-parser@2.0.3: {}
 

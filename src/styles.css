@@ -2640,3 +2640,61 @@ input:focus-visible {
   }
 
 }
+
+/* 底部工具栏：上方为导出控制行（格式 + 背景透明），下方为主操作行 */
+.bottom-toolbar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.bottom-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.bottom-export-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.export-format-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.format-option,
+.transparency-option {
+  min-width: 0;
+}
+
+.format-option.is-active,
+.transparency-option.is-active {
+  color: #fff !important;
+  background: var(--sky) !important;
+  border: 0 !important;
+  box-shadow: 0 4px 0 var(--sky-deep) !important;
+}
+
+.format-option.is-active [class*="animal-btn-icon"],
+.format-option.is-active svg,
+.transparency-option.is-active [class*="animal-btn-icon"],
+.transparency-option.is-active svg {
+  color: #fff !important;
+}
+
+/* JPG 质量设置弹窗 */
+.save-preview-dialog.is-export-settings {
+  width: min(440px, 100%);
+}
+
+.save-quality-control {
+  width: min(320px, 100%);
+  justify-self: center;
+}

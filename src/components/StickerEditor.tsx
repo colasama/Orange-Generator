@@ -48,6 +48,7 @@ import { waitForGifControllers } from "../hooks/useGifCanvas";
 import { GifEncodingSession } from "../gifExport";
 import { readImageDimensions } from "../imageMeta";
 import { PngEncodingSession } from "../pngExport";
+import { JpegEncodingSession } from "../jpegExport";
 import { StickerNode } from "./StickerNode";
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -87,6 +88,7 @@ interface ExportedImage {
 
 type ExportState =
   | { status: "idle" }
+  | { status: "settings" }
   | { status: "generating" }
   | { status: "ready"; image: ExportedImage }
   | { status: "error"; message: string };
@@ -184,6 +186,19 @@ function canvasToPngBlob(canvas: HTMLCanvasElement) {
       if (blob) resolve(blob);
       else reject(new Error("浏览器无法生成 PNG 图片"));
     }, "image/png");
+  });
+}
+
+function canvasToJpegBlob(canvas: HTMLCanvasElement, quality: number) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("浏览器无法生成 JPG 图片"));
+      },
+      "image/jpeg",
+      quality,
+    );
   });
 }
 
@@ -350,24 +365,16 @@ function decodeBackgroundOriginal(src: string): Promise<HTMLImageElement> {
   });
 }
 
-async function exportOriginalSizePng(
+async function withOriginalSizeStrips(
   stage: Konva.Stage,
   background: BackgroundImage,
   getBackgroundNode: () => Konva.Image | null,
-): Promise<Blob> {
+  onStrip: (imageData: ImageData, y: number) => Promise<void>,
+): Promise<void> {
   const exportWidth = background.originalWidth;
   const exportHeight = background.originalHeight;
-  const totalPixels = exportWidth * exportHeight;
-  const deviceMemory = getDeviceMemory();
-  if (
-    deviceMemory !== undefined &&
-    deviceMemory <= 4 &&
-    totalPixels > ORIGINAL_EXPORT_MAX_PIXELS
-  ) {
-    throw new ExportSizeError(
-      "图片分辨率过大，当前设备内存不足以原尺寸导出",
-    );
-  }
+  const ratioX = exportWidth / background.width;
+  const ratioY = exportHeight / background.height;
 
   let originalImage: HTMLImageElement;
   try {
@@ -376,8 +383,6 @@ async function exportOriginalSizePng(
     throw new ExportSizeError("原图解码失败，无法原尺寸导出");
   }
 
-  const ratioX = exportWidth / background.width;
-  const ratioY = exportHeight / background.height;
   const backgroundNode = getBackgroundNode();
   const previousBackgroundImage = backgroundNode?.image() ?? null;
   const previousSize = { width: stage.width(), height: stage.height() };
@@ -391,27 +396,19 @@ async function exportOriginalSizePng(
   backgroundNode?.image(originalImage);
 
   try {
-    const session = await PngEncodingSession.create(exportWidth, exportHeight);
-    try {
-      for (let y = 0; y < exportHeight; y += PNG_STRIP_HEIGHT) {
-        const stripHeight = Math.min(PNG_STRIP_HEIGHT, exportHeight - y);
-        const offsetY = -y / ratioY;
-        layers.forEach((layer) => layer.position({ x: 0, y: offsetY }));
-        stage.size({ width: exportWidth, height: stripHeight });
-        stage.scale({ x: ratioX, y: ratioY });
-        stage.batchDraw();
-        const stripCanvas = stage.toCanvas({ pixelRatio: 1 });
-        const context = stripCanvas.getContext("2d", {
-          willReadFrequently: true,
-        });
-        if (!context) throw new Error("浏览器无法读取导出画布");
-        await session.addStrip(
-          context.getImageData(0, 0, exportWidth, stripHeight),
-        );
-      }
-      return await session.finish();
-    } finally {
-      session.terminate();
+    for (let y = 0; y < exportHeight; y += PNG_STRIP_HEIGHT) {
+      const stripHeight = Math.min(PNG_STRIP_HEIGHT, exportHeight - y);
+      const offsetY = -y / ratioY;
+      layers.forEach((layer) => layer.position({ x: 0, y: offsetY }));
+      stage.size({ width: exportWidth, height: stripHeight });
+      stage.scale({ x: ratioX, y: ratioY });
+      stage.batchDraw();
+      const stripCanvas = stage.toCanvas({ pixelRatio: 1 });
+      const context = stripCanvas.getContext("2d", {
+        willReadFrequently: true,
+      });
+      if (!context) throw new Error("浏览器无法读取导出画布");
+      await onStrip(context.getImageData(0, 0, exportWidth, stripHeight), y);
     }
   } finally {
     backgroundNode?.image(previousBackgroundImage);
@@ -422,6 +419,75 @@ async function exportOriginalSizePng(
       layer.position(position);
     });
     stage.batchDraw();
+  }
+}
+
+function guardOriginalSizeExport(background: BackgroundImage): void {
+  const totalPixels = background.originalWidth * background.originalHeight;
+  const deviceMemory = getDeviceMemory();
+  if (
+    deviceMemory !== undefined &&
+    deviceMemory <= 4 &&
+    totalPixels > ORIGINAL_EXPORT_MAX_PIXELS
+  ) {
+    throw new ExportSizeError(
+      "图片分辨率过大，当前设备内存不足以原尺寸导出",
+    );
+  }
+}
+
+/**
+ * 导出渲染期间把所有 Konva 画布的 pixelRatio 归一为 1，
+ * 避免 canvas 像素尺寸 = 逻辑尺寸 × devicePixelRatio 造成的内存放大。
+ */
+function setExportPixelRatio(stage: Konva.Stage, ratio: number) {
+  stage.getLayers().forEach((layer) => {
+    layer.canvas.setPixelRatio(ratio);
+  });
+  stage.bufferCanvas.setPixelRatio(ratio);
+  stage.bufferHitCanvas.setPixelRatio(ratio);
+}
+
+async function exportOriginalSizePng(
+  stage: Konva.Stage,
+  background: BackgroundImage,
+  getBackgroundNode: () => Konva.Image | null,
+): Promise<Blob> {
+  guardOriginalSizeExport(background);
+  const session = await PngEncodingSession.create(
+    background.originalWidth,
+    background.originalHeight,
+  );
+  try {
+    await withOriginalSizeStrips(stage, background, getBackgroundNode, (
+      imageData,
+    ) => session.addStrip(imageData));
+    return await session.finish();
+  } finally {
+    session.terminate();
+  }
+}
+
+async function exportOriginalSizeJpeg(
+  stage: Konva.Stage,
+  background: BackgroundImage,
+  getBackgroundNode: () => Konva.Image | null,
+  quality: number,
+): Promise<Blob> {
+  guardOriginalSizeExport(background);
+  const session = await JpegEncodingSession.create(
+    background.originalWidth,
+    background.originalHeight,
+    quality,
+  );
+  try {
+    await withOriginalSizeStrips(stage, background, getBackgroundNode, (
+      imageData,
+      y,
+    ) => session.addStrip(imageData, y));
+    return await session.finish();
+  } finally {
+    session.terminate();
   }
 }
 
@@ -1717,12 +1783,19 @@ export function StickerEditor() {
   const [exportState, setExportState] = useState<ExportState>({
     status: "idle",
   });
+  const [exportFormat, setExportFormat] = useState<"png" | "jpg">("png");
+  const [jpgQuality, setJpgQuality] = useState(90);
+  const [transparentBackground, setTransparentBackground] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const isMobileLayout = useMobileLayout();
   const history = useStickerHistory();
+  const hasGifStickers = history.stickers.some(
+    (sticker) => sticker.format === "GIF",
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const backgroundImageRef = useRef<Konva.Image>(null);
+  const backgroundRectRef = useRef<Konva.Rect>(null);
   const stageContainerRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
   const customStickerUrlsRef = useRef(new Set<string>());
@@ -1996,7 +2069,9 @@ export function StickerEditor() {
       .filter((sticker) => sticker.format === "GIF")
       .map((sticker) => sticker.instanceId);
     const isGifExport = animatedStickerIds.length > 0;
+    const exportAsJpg = !isGifExport && exportFormat === "jpg";
     let pngSizeNote: string | null = null;
+    let jpgSizeNote: string | null = null;
     setExportState({ status: "generating" });
     const previousSelection = selectedId;
     setSelectedId(null);
@@ -2019,31 +2094,40 @@ export function StickerEditor() {
       let blob: Blob;
       try {
         gifControllers.forEach((controller) => controller.pause());
-        stage.size({ width: background.width, height: background.height });
-        stage.scale({ x: 1, y: 1 });
+        setExportPixelRatio(stage, 1);
+        const exportWithTransparentBackground =
+          !isGifExport && !exportAsJpg && transparentBackground;
+        if (exportWithTransparentBackground) {
+          backgroundRectRef.current?.visible(false);
+        }
 
-        if (isGifExport) {
-          const pixelRatio = Math.min(
-            1,
-            Math.sqrt(
-              GIF_EXPORT_MAX_PIXELS / Math.max(1, background.width * background.height)
-            )
-          );
-          const exportWidth = Math.max(1, Math.round(background.width * pixelRatio));
-          const exportHeight = Math.max(1, Math.round(background.height * pixelRatio));
-          const frameDelay = Math.round(1000 / GIF_EXPORT_FPS);
-          const duration = Math.min(
-            GIF_EXPORT_MAX_DURATION_MS,
+          if (isGifExport) {
+            const exportScale = Math.min(
+              1,
+              Math.sqrt(
+                GIF_EXPORT_MAX_PIXELS / Math.max(1, background.width * background.height)
+              )
+            );
+            const exportWidth = Math.max(1, Math.round(background.width * exportScale));
+            const exportHeight = Math.max(1, Math.round(background.height * exportScale));
+            const frameDelay = Math.round(1000 / GIF_EXPORT_FPS);
+            const duration = Math.min(
+              GIF_EXPORT_MAX_DURATION_MS,
             Math.max(...gifControllers.map((controller) => controller.duration))
-          );
-          const frameCount = Math.max(1, Math.ceil(duration / frameDelay));
-          encodingSession = await GifEncodingSession.create(exportWidth, exportHeight);
+            );
+            const frameCount = Math.max(1, Math.ceil(duration / frameDelay));
+            stage.size({ width: exportWidth, height: exportHeight });
+            stage.scale({
+              x: exportWidth / background.width,
+              y: exportHeight / background.height,
+            });
+            encodingSession = await GifEncodingSession.create(exportWidth, exportHeight);
 
           for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-            const timeMs = frameIndex * frameDelay;
-            gifControllers.forEach((controller) => controller.renderAt(timeMs));
-            stage.batchDraw();
-            const frameCanvas = stage.toCanvas({ pixelRatio });
+              const timeMs = frameIndex * frameDelay;
+              gifControllers.forEach((controller) => controller.renderAt(timeMs));
+              stage.batchDraw();
+              const frameCanvas = stage.toCanvas({ pixelRatio: 1 });
             const context = frameCanvas.getContext("2d", { willReadFrequently: true });
             if (!context) throw new Error("浏览器无法读取 GIF 合成画布");
             await encodingSession.addFrame(
@@ -2052,9 +2136,37 @@ export function StickerEditor() {
             );
           }
 
-          blob = await encodingSession.finish();
-        } else {
+            blob = await encodingSession.finish();
+          } else if (exportAsJpg) {
+            const jpgQualityValue = jpgQuality / 100;
           const needsOriginalSizeExport =
+            background.originalWidth > background.width ||
+            background.originalHeight > background.height;
+          if (needsOriginalSizeExport) {
+            try {
+              blob = await exportOriginalSizeJpeg(stage, background, () =>
+                backgroundImageRef.current
+              , jpgQuality);
+            } catch (error) {
+              jpgSizeNote =
+                error instanceof ExportSizeError
+                  ? `${error.message}，已按编辑尺寸导出`
+                  : "原尺寸 JPG 生成失败，已按编辑尺寸导出";
+              stage.size({ width: background.width, height: background.height });
+              stage.scale({ x: 1, y: 1 });
+              stage.batchDraw();
+              const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
+              blob = await canvasToJpegBlob(exportCanvas, jpgQualityValue);
+            }
+          } else {
+            stage.size({ width: background.width, height: background.height });
+            stage.scale({ x: 1, y: 1 });
+            stage.batchDraw();
+            const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
+            blob = await canvasToJpegBlob(exportCanvas, jpgQualityValue);
+            }
+          } else {
+            const needsOriginalSizeExport =
             background.originalWidth > background.width ||
             background.originalHeight > background.height;
           if (needsOriginalSizeExport) {
@@ -2072,14 +2184,18 @@ export function StickerEditor() {
               blob = await canvasToPngBlob(exportCanvas);
             }
           } else {
+            stage.size({ width: background.width, height: background.height });
+            stage.scale({ x: 1, y: 1 });
             stage.batchDraw();
             const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
             blob = await canvasToPngBlob(exportCanvas);
           }
         }
-      } finally {
+        } finally {
         encodingSession?.terminate();
-        stage.size({
+          backgroundRectRef.current?.visible(true);
+          setExportPixelRatio(stage, window.devicePixelRatio || 1);
+          stage.size({
           width: previousStage.width,
           height: previousStage.height,
         });
@@ -2090,8 +2206,12 @@ export function StickerEditor() {
       const fileBase = background.name
         .replace(/\.[^.]+$/, "")
         .replace(/[^\w\u4e00-\u9fa5-]+/g, "-");
-      const fileExtension = isGifExport ? "gif" : "png";
-      const mimeType = isGifExport ? "image/gif" : "image/png";
+      const fileExtension = isGifExport ? "gif" : exportAsJpg ? "jpg" : "png";
+      const mimeType = isGifExport
+        ? "image/gif"
+        : exportAsJpg
+          ? "image/jpeg"
+          : "image/png";
       const fileName = `${
         fileBase || "安洁莉娜小姐的酸橙味照片"
       }-贴纸版.${fileExtension}`;
@@ -2127,7 +2247,9 @@ export function StickerEditor() {
         "已开始下载",
         isGifExport
           ? "动态贴纸已合成为循环 GIF"
-          : pngSizeNote ?? "正在导出原图尺寸的 PNG",
+          : exportAsJpg
+            ? jpgSizeNote ?? "正在导出原图尺寸的 JPG"
+            : pngSizeNote ?? "正在导出原图尺寸的 PNG",
         2500
       );
     } catch (error) {
@@ -2143,11 +2265,17 @@ export function StickerEditor() {
     }
   };
 
-  const exportFormatLabel = history.stickers.some(
-    (sticker) => sticker.format === "GIF"
-  )
+  const exportFormatLabel = hasGifStickers
     ? "GIF"
-    : "PNG";
+    : exportFormat === "jpg"
+      ? "JPG"
+      : "PNG";
+  const transparencyLabel =
+    hasGifStickers || exportFormat !== "png"
+      ? "白色背景"
+      : transparentBackground
+        ? "透明背景"
+        : "白色背景";
 
   const exportedImage =
     exportState.status === "ready" ? exportState.image : null;
@@ -2302,6 +2430,7 @@ export function StickerEditor() {
                 >
                   <Layer>
                     <Rect
+                      ref={backgroundRectRef}
                       x={0}
                       y={0}
                       width={canvasWidth}
@@ -2398,8 +2527,58 @@ export function StickerEditor() {
       </div>
 
       <div className="bottom-toolbar">
-        <div className="bottom-copy"></div>
-        <div className="bottom-actions">
+        <div className="bottom-export-controls">
+          <div
+            className="export-format-group"
+            role="group"
+            aria-label="导出格式"
+            title={hasGifStickers ? "含动态贴纸，自动导出 GIF" : "导出格式"}
+          >
+            <Button
+              className={`format-option${exportFormat === "png" ? " is-active" : ""}`}
+              disabled={hasGifStickers}
+              onClick={() => {
+                setExportFormat("png");
+                if (exportState.status === "settings") {
+                  setExportState({ status: "idle" });
+                }
+              }}
+            >
+              PNG
+            </Button>
+            <Button
+              className={`format-option${exportFormat === "jpg" ? " is-active" : ""}`}
+              disabled={hasGifStickers}
+              onClick={() => {
+                setExportFormat("jpg");
+                if (exportState.status === "settings") {
+                  setExportState({ status: "idle" });
+                }
+              }}
+            >
+              JPG
+            </Button>
+          </div>
+          <Button
+            className={`transparency-option${
+              !hasGifStickers && exportFormat === "png" && transparentBackground
+                ? " is-active"
+                : ""
+            }`}
+            disabled={hasGifStickers || exportFormat !== "png"}
+            title={
+              exportFormat === "png"
+                ? "PNG 导出时背景透明"
+                : "仅 PNG 导出支持透明背景"
+            }
+            onClick={() => setTransparentBackground((value) => !value)}
+          >
+            {transparencyLabel}
+          </Button>
+        </div>
+        <div className="bottom-main-row">
+          <div className="bottom-copy"></div>
+          <div className="bottom-actions">
           <Button
             className="clear-button"
             size="large"
@@ -2417,10 +2596,17 @@ export function StickerEditor() {
             aria-busy={isSaving}
             aria-label="保存图片"
             icon={<DownloadSimple size="1em" weight="bold" />}
-            onClick={() => void saveImage()}
+            onClick={() => {
+              if (!hasGifStickers && exportFormat === "jpg") {
+                setExportState({ status: "settings" });
+              } else {
+                void saveImage();
+              }
+            }}
           >
             <CanvasButtonLabel text="保存图片" />
           </Button>
+          </div>
         </div>
       </div>
 
@@ -2470,6 +2656,47 @@ export function StickerEditor() {
               }
               aria-busy={exportState.status === "generating"}
             >
+              {exportState.status === "settings" && (
+                <div className="export-generating">
+                  <div className="export-generating-copy">
+                    <strong>保存为 JPG</strong>
+                    <span>质量越高文件越大，导出速度越慢</span>
+                  </div>
+                  <label className="adjustment-control save-quality-control">
+                    <span className="adjustment-label">
+                      <span>JPG 质量</span>
+                      <output>{jpgQuality}%</output>
+                    </span>
+                    <input
+                      type="range"
+                      min={1}
+                      max={100}
+                      step={1}
+                      value={jpgQuality}
+                      onChange={(event) =>
+                        setJpgQuality(Number(event.target.value))
+                      }
+                      aria-label="JPG 质量"
+                    />
+                  </label>
+                  <div className="save-preview-actions">
+                    <Button
+                      onClick={() => setExportState({ status: "idle" })}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      className="share-save-button"
+                      type="primary"
+                      icon={<DownloadSimple size="1em" weight="bold" />}
+                      onClick={() => void saveImage()}
+                    >
+                      <CanvasButtonLabel text="生成图片" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {exportState.status === "generating" && (
                 <div
                   className="export-generating"
