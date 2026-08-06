@@ -39,7 +39,7 @@ export default function App() {
         <div
           className={`loading-layer${loadingActive ? '' : ' is-leaving'}`}
           aria-live="polite"
-          aria-label="正在打开安心院小姐的酸橙味照片生成器"
+          aria-label="正在打开安洁莉娜小姐的酸橙味照片生成器"
         >
           <div className="loading-content" aria-hidden="true">
             <img className="loading-title-logo" src="/logo.svg" alt="" />
@@ -54,7 +54,7 @@ export default function App() {
             <img
               className="brand-title-logo"
               src="/logo.svg"
-              alt="安心院小姐的酸橙味照片生成器"
+              alt="安洁莉娜小姐的酸橙味照片生成器"
             />
           </div>
         </header>
@@ -86,12 +86,19 @@ export default function App() {
               <div className="footer-links">
                 <a
                   className="footer-project-link"
-                  href="https://github.com/colasama/Orange-Generator"
+                  href="https://github.com/linglu114/Orange-Generator"
                   target="_blank"
                   rel="noreferrer"
                 >
                   <GithubLogo size="1em" weight="bold" aria-hidden="true" />
-                  <span>colasama/Orange-Generator</span>
+                  <span>linglu114/Orange-Generator</span>
+                </a>
+                <a
+                  href="https://github.com/colasama/Orange-Generator"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Fork 自 colasama/Orange-Generator
                 </a>
                 <a
                   href="https://github.com/guokaigdg/animal-island-ui"

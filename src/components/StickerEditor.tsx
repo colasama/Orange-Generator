@@ -46,6 +46,8 @@ import {
 import { useHtmlImage } from "../hooks/useHtmlImage";
 import { waitForGifControllers } from "../hooks/useGifCanvas";
 import { GifEncodingSession } from "../gifExport";
+import { readImageDimensions } from "../imageMeta";
+import { PngEncodingSession } from "../pngExport";
 import { StickerNode } from "./StickerNode";
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -55,6 +57,11 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/svg+xml",
 ]);
 const ALLOWED_STICKER_TYPES = new Set([...ALLOWED_IMAGE_TYPES, "image/gif"]);
+// 手机 50MP 传感器四合一（8160×6120 → 4080×3060）的等效像素上限，
+// 低于此值的照片不压缩、原样进画布。
+const MAX_EDIT_PIXELS = 12_500_000;
+const PNG_STRIP_HEIGHT = 256;
+const ORIGINAL_EXPORT_MAX_PIXELS = 80_000_000;
 const GIF_EXPORT_FPS = 12;
 const GIF_EXPORT_MAX_DURATION_MS = 6_000;
 const GIF_EXPORT_MAX_PIXELS = 1_500_000;
@@ -322,12 +329,145 @@ function useCanvasScale(
   return scale;
 }
 
+class ExportSizeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ExportSizeError";
+  }
+}
+
+function getDeviceMemory(): number | undefined {
+  return (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+}
+
+function decodeBackgroundOriginal(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("原图读取失败"));
+    image.src = src;
+  });
+}
+
+async function exportOriginalSizePng(
+  stage: Konva.Stage,
+  background: BackgroundImage,
+  getBackgroundNode: () => Konva.Image | null,
+): Promise<Blob> {
+  const exportWidth = background.originalWidth;
+  const exportHeight = background.originalHeight;
+  const totalPixels = exportWidth * exportHeight;
+  const deviceMemory = getDeviceMemory();
+  if (
+    deviceMemory !== undefined &&
+    deviceMemory <= 4 &&
+    totalPixels > ORIGINAL_EXPORT_MAX_PIXELS
+  ) {
+    throw new ExportSizeError(
+      "图片分辨率过大，当前设备内存不足以原尺寸导出",
+    );
+  }
+
+  let originalImage: HTMLImageElement;
+  try {
+    originalImage = await decodeBackgroundOriginal(background.src);
+  } catch {
+    throw new ExportSizeError("原图解码失败，无法原尺寸导出");
+  }
+
+  const ratioX = exportWidth / background.width;
+  const ratioY = exportHeight / background.height;
+  const backgroundNode = getBackgroundNode();
+  const previousBackgroundImage = backgroundNode?.image() ?? null;
+  const previousSize = { width: stage.width(), height: stage.height() };
+  const previousScale = { x: stage.scaleX(), y: stage.scaleY() };
+  const layers = stage.getLayers();
+  const previousLayerPositions = layers.map((layer) => ({
+    x: layer.x(),
+    y: layer.y(),
+  }));
+
+  backgroundNode?.image(originalImage);
+
+  try {
+    const session = await PngEncodingSession.create(exportWidth, exportHeight);
+    try {
+      for (let y = 0; y < exportHeight; y += PNG_STRIP_HEIGHT) {
+        const stripHeight = Math.min(PNG_STRIP_HEIGHT, exportHeight - y);
+        const offsetY = -y / ratioY;
+        layers.forEach((layer) => layer.position({ x: 0, y: offsetY }));
+        stage.size({ width: exportWidth, height: stripHeight });
+        stage.scale({ x: ratioX, y: ratioY });
+        stage.batchDraw();
+        const stripCanvas = stage.toCanvas({ pixelRatio: 1 });
+        const context = stripCanvas.getContext("2d", {
+          willReadFrequently: true,
+        });
+        if (!context) throw new Error("浏览器无法读取导出画布");
+        await session.addStrip(
+          context.getImageData(0, 0, exportWidth, stripHeight),
+        );
+      }
+      return await session.finish();
+    } finally {
+      session.terminate();
+    }
+  } finally {
+    backgroundNode?.image(previousBackgroundImage);
+    stage.size(previousSize);
+    stage.scale(previousScale);
+    layers.forEach((layer, index) => {
+      const position = previousLayerPositions[index];
+      layer.position(position);
+    });
+    stage.batchDraw();
+  }
+}
+
 async function loadBackgroundFile(file: File): Promise<BackgroundImage> {
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
     throw new Error("仅支持 PNG、JPG、WebP 或 SVG 图片");
   }
 
   const src = URL.createObjectURL(file);
+  const dimensions = await readImageDimensions(file);
+  const originalWidth = dimensions?.width ?? 0;
+  const originalHeight = dimensions?.height ?? 0;
+
+  if (
+    originalWidth > 0 &&
+    originalHeight > 0 &&
+    typeof createImageBitmap === "function"
+  ) {
+    const scale = Math.min(
+      1,
+      Math.sqrt(MAX_EDIT_PIXELS / Math.max(1, originalWidth * originalHeight)),
+    );
+    const width = Math.max(1, Math.round(originalWidth * scale));
+    const height = Math.max(1, Math.round(originalHeight * scale));
+    if (scale < 1) {
+      try {
+        const bitmap = await createImageBitmap(file, {
+          resizeWidth: width,
+          resizeHeight: height,
+          resizeQuality: "high",
+        });
+        return {
+          src,
+          name: file.name,
+          width: bitmap.width,
+          height: bitmap.height,
+          originalWidth,
+          originalHeight,
+          bitmap,
+        };
+      } catch {
+        // createImageBitmap 缩放失败时回退到完整解码路径
+      }
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const image = new window.Image();
     image.onload = () => {
@@ -336,6 +476,8 @@ async function loadBackgroundFile(file: File): Promise<BackgroundImage> {
         name: file.name,
         width: image.naturalWidth,
         height: image.naturalHeight,
+        originalWidth: image.naturalWidth,
+        originalHeight: image.naturalHeight,
       });
     };
     image.onerror = () => {
@@ -1580,6 +1722,7 @@ export function StickerEditor() {
   const history = useStickerHistory();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
+  const backgroundImageRef = useRef<Konva.Image>(null);
   const stageContainerRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<number | null>(null);
   const customStickerUrlsRef = useRef(new Set<string>());
@@ -1590,7 +1733,8 @@ export function StickerEditor() {
     canvasWidth,
     canvasHeight
   );
-  const backgroundImage = useHtmlImage(background?.src);
+  const bgHtmlImage = useHtmlImage(background?.src);
+  const backgroundImage = background?.bitmap ?? bgHtmlImage;
 
   const showToast = useCallback(
     (
@@ -1647,6 +1791,7 @@ export function StickerEditor() {
 
   useEffect(() => {
     return () => {
+      background?.bitmap?.close();
       if (background?.src.startsWith("blob:"))
         URL.revokeObjectURL(background.src);
     };
@@ -1676,10 +1821,14 @@ export function StickerEditor() {
         history.reset();
         setBackground(nextBackground);
         setSelectedId(null);
+        const optimizedNote =
+          nextBackground.originalWidth > nextBackground.width
+            ? "，已优化编辑性能"
+            : "";
         showToast(
           "success",
           "图片已放进画布",
-          `${nextBackground.width} × ${nextBackground.height}px`,
+          `${nextBackground.originalWidth} × ${nextBackground.originalHeight}px${optimizedNote}`,
           2400
         );
       } catch (error) {
@@ -1847,6 +1996,7 @@ export function StickerEditor() {
       .filter((sticker) => sticker.format === "GIF")
       .map((sticker) => sticker.instanceId);
     const isGifExport = animatedStickerIds.length > 0;
+    let pngSizeNote: string | null = null;
     setExportState({ status: "generating" });
     const previousSelection = selectedId;
     setSelectedId(null);
@@ -1904,9 +2054,28 @@ export function StickerEditor() {
 
           blob = await encodingSession.finish();
         } else {
-          stage.batchDraw();
-          const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
-          blob = await canvasToPngBlob(exportCanvas);
+          const needsOriginalSizeExport =
+            background.originalWidth > background.width ||
+            background.originalHeight > background.height;
+          if (needsOriginalSizeExport) {
+            try {
+              blob = await exportOriginalSizePng(stage, background, () =>
+                backgroundImageRef.current
+              );
+            } catch (error) {
+              if (!(error instanceof ExportSizeError)) throw error;
+              pngSizeNote = `${error.message}，已按编辑尺寸导出`;
+              stage.size({ width: background.width, height: background.height });
+              stage.scale({ x: 1, y: 1 });
+              stage.batchDraw();
+              const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
+              blob = await canvasToPngBlob(exportCanvas);
+            }
+          } else {
+            stage.batchDraw();
+            const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
+            blob = await canvasToPngBlob(exportCanvas);
+          }
         }
       } finally {
         encodingSession?.terminate();
@@ -1924,7 +2093,7 @@ export function StickerEditor() {
       const fileExtension = isGifExport ? "gif" : "png";
       const mimeType = isGifExport ? "image/gif" : "image/png";
       const fileName = `${
-        fileBase || "安心院小姐的酸橙味照片"
+        fileBase || "安洁莉娜小姐的酸橙味照片"
       }-贴纸版.${fileExtension}`;
       const file = new File([blob], fileName, { type: mimeType });
       const previewUrl = await blobToDataUrl(blob);
@@ -1956,7 +2125,9 @@ export function StickerEditor() {
       showToast(
         "success",
         "已开始下载",
-        isGifExport ? "动态贴纸已合成为循环 GIF" : "正在导出原图尺寸的 PNG",
+        isGifExport
+          ? "动态贴纸已合成为循环 GIF"
+          : pngSizeNote ?? "正在导出原图尺寸的 PNG",
         2500
       );
     } catch (error) {
@@ -2140,6 +2311,7 @@ export function StickerEditor() {
                     />
                     {backgroundImage && background && (
                       <KonvaImage
+                        ref={backgroundImageRef}
                         image={backgroundImage}
                         x={0}
                         y={0}

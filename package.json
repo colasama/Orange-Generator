@@ -17,6 +17,7 @@
     "gifenc": "^1.0.3",
     "gifuct-js": "^2.1.2",
     "konva": "^10.3.0",
+    "pako": "^3.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-konva": "^19.2.5"
