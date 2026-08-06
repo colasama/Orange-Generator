@@ -55,7 +55,6 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/svg+xml",
 ]);
 const ALLOWED_STICKER_TYPES = new Set([...ALLOWED_IMAGE_TYPES, "image/gif"]);
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const GIF_EXPORT_FPS = 12;
 const GIF_EXPORT_MAX_DURATION_MS = 6_000;
 const GIF_EXPORT_MAX_PIXELS = 1_500_000;
@@ -327,9 +326,6 @@ async function loadBackgroundFile(file: File): Promise<BackgroundImage> {
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
     throw new Error("仅支持 PNG、JPG、WebP 或 SVG 图片");
   }
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error("图片不能超过 20 MB");
-  }
 
   const src = URL.createObjectURL(file);
   return new Promise((resolve, reject) => {
@@ -361,9 +357,6 @@ function getStickerFormat(file: File): StickerAsset["format"] {
 async function loadCustomStickerFile(file: File): Promise<StickerAsset> {
   if (!ALLOWED_STICKER_TYPES.has(file.type)) {
     throw new Error("仅支持 PNG、JPG、WebP、SVG 或 GIF 图片");
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    throw new Error("贴纸图片不能超过 20 MB");
   }
 
   const src = URL.createObjectURL(file);
