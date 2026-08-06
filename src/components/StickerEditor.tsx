@@ -766,6 +766,8 @@ function ThrottledAdjustmentSlider({
 
 interface StickerInspectorProps {
   sticker: PlacedSticker;
+  offset: { x: number; y: number };
+  onOffsetChange: (offset: { x: number; y: number }) => void;
   onUpdate: (patch: Partial<PlacedSticker>) => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -1012,16 +1014,83 @@ function EffectToggle({
 
 function StickerInspector({
   sticker,
+  offset,
+  onOffsetChange,
   onUpdate,
   onDuplicate,
   onDelete,
   onClose,
 }: StickerInspectorProps) {
   const supportsVisualEffects = sticker.format !== "GIF";
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    panelRect: DOMRect;
+    columnRect: DOMRect;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleHeadingPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button")) return;
+    const panel = event.currentTarget.closest<HTMLElement>(".inspector-panel");
+    const column = event.currentTarget.closest<HTMLElement>(".canvas-column");
+    if (!panel || !column) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: offset.x,
+      offsetY: offset.y,
+      panelRect: panel.getBoundingClientRect(),
+      columnRect: column.getBoundingClientRect(),
+    };
+    setIsDragging(true);
+  };
+
+  const handleHeadingPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragStateRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const nextX = drag.offsetX + (event.clientX - drag.startX);
+    const nextY = drag.offsetY + (event.clientY - drag.startY);
+    const minX = drag.columnRect.left - drag.panelRect.left;
+    const maxX = drag.columnRect.right - drag.panelRect.right;
+    const minY = drag.columnRect.top - drag.panelRect.top;
+    const maxY = drag.columnRect.bottom - drag.panelRect.bottom;
+    onOffsetChange({
+      x: maxX < minX ? 0 : Math.max(minX, Math.min(maxX, nextX)),
+      y: maxY < minY ? 0 : Math.max(minY, Math.min(maxY, nextY)),
+    });
+  };
+
+  const handleHeadingPointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragStateRef.current || event.pointerId !== dragStateRef.current.pointerId) {
+      return;
+    }
+    dragStateRef.current = null;
+    setIsDragging(false);
+  };
 
   return (
-    <Card className="inspector-panel" color="app-yellow">
-      <div className="inspector-heading">
+    <Card
+      className={`inspector-panel${
+        offset.x !== 0 || offset.y !== 0 ? " is-dragged" : ""
+      }${isDragging ? " is-dragging" : ""}`}
+      color="app-yellow"
+      style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+    >
+      <div
+        className="inspector-heading"
+        title="拖动调整位置"
+        onPointerDown={handleHeadingPointerDown}
+        onPointerMove={handleHeadingPointerMove}
+        onPointerUp={handleHeadingPointerEnd}
+        onPointerCancel={handleHeadingPointerEnd}
+      >
         <div>
           <span className="inspector-kicker">正在编辑</span>
           <strong>贴纸调整</strong>
@@ -1786,6 +1855,7 @@ export function StickerEditor() {
   const [exportFormat, setExportFormat] = useState<"png" | "jpg">("png");
   const [jpgQuality, setJpgQuality] = useState(90);
   const [transparentBackground, setTransparentBackground] = useState(false);
+  const [inspectorOffset, setInspectorOffset] = useState({ x: 0, y: 0 });
   const [toast, setToast] = useState<ToastState | null>(null);
   const isMobileLayout = useMobileLayout();
   const history = useStickerHistory();
@@ -2499,6 +2569,8 @@ export function StickerEditor() {
           {selectedSticker && !isMobileLayout && (
             <StickerInspector
               sticker={selectedSticker}
+              offset={inspectorOffset}
+              onOffsetChange={setInspectorOffset}
               onUpdate={(patch) =>
                 updateSticker(selectedSticker.instanceId, patch)
               }

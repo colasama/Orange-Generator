@@ -757,6 +757,23 @@ input:focus-visible {
   animation: inspector-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.inspector-heading {
+  cursor: grab;
+  user-select: none;
+}
+
+.inspector-heading:active {
+  cursor: grabbing;
+}
+
+.inspector-panel.is-dragging {
+  user-select: none;
+}
+
+.inspector-panel.is-dragged {
+  animation: none;
+}
+
 .mobile-sticker-dock,
 .mobile-adjustment-mask {
   display: none;
