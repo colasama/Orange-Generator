@@ -777,6 +777,19 @@ input:focus-visible {
   margin-bottom: 14px;
   padding-bottom: 10px;
   border-bottom: 2px dashed rgb(200 112 0 / 28%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.inspector-panel.is-dragging {
+  animation: none;
+  transition: none !important;
+  will-change: transform;
+}
+
+.inspector-panel.is-dragging .inspector-heading {
+  cursor: grabbing;
 }
 
 .inspector-heading > div {

@@ -7,6 +7,7 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { Button, Card, Modal, Tooltip } from "animal-island-ui";
@@ -817,10 +818,164 @@ function StickerInspector({
   onClose,
 }: StickerInspectorProps) {
   const supportsVisualEffects = sticker.format !== "GIF";
+  const headingRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    panel: HTMLElement;
+    startX: number;
+    startY: number;
+    startLeft: number;
+    startTop: number;
+    maxLeft: number;
+    maxTop: number;
+    latestLeft: number;
+    latestTop: number;
+    animationFrame: number | null;
+  } | null>(null);
+  const [panelPosition, setPanelPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
+  const hasCustomPanelPosition = panelPosition !== null;
+
+  const constrainPanelPosition = useCallback((left: number, top: number) => {
+    const panel = headingRef.current?.closest<HTMLElement>(".inspector-panel");
+    const container = panel?.parentElement;
+    if (!panel || !container) return { left, top };
+
+    return {
+      left: Math.max(0, Math.min(container.clientWidth - panel.offsetWidth, left)),
+      top: Math.max(0, Math.min(container.clientHeight - panel.offsetHeight, top)),
+    };
+  }, []);
+
+  const startPanelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) {
+      return;
+    }
+
+    const panel = event.currentTarget.closest<HTMLElement>(".inspector-panel");
+    const container = panel?.parentElement;
+    if (!panel || !container) return;
+
+    panel.classList.add("is-dragging");
+
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      panel,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: panel.offsetLeft,
+      startTop: panel.offsetTop,
+      maxLeft: Math.max(0, container.clientWidth - panel.offsetWidth),
+      maxTop: Math.max(0, container.clientHeight - panel.offsetHeight),
+      latestLeft: panel.offsetLeft,
+      latestTop: panel.offsetTop,
+      animationFrame: null,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  const movePanel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+
+    dragState.latestLeft = Math.max(
+      0,
+      Math.min(
+        dragState.maxLeft,
+        dragState.startLeft + event.clientX - dragState.startX
+      )
+    );
+    dragState.latestTop = Math.max(
+      0,
+      Math.min(
+        dragState.maxTop,
+        dragState.startTop + event.clientY - dragState.startY
+      )
+    );
+
+    if (dragState.animationFrame !== null) return;
+    dragState.animationFrame = window.requestAnimationFrame(() => {
+      const current = dragStateRef.current;
+      if (!current || current.pointerId !== event.pointerId) return;
+      current.animationFrame = null;
+      current.panel.style.transform = `translate3d(${
+        current.latestLeft - current.startLeft
+      }px, ${current.latestTop - current.startTop}px, 0)`;
+    });
+  };
+
+  const stopPanelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    if (dragState.animationFrame !== null) {
+      window.cancelAnimationFrame(dragState.animationFrame);
+    }
+    dragState.panel.style.left = `${dragState.latestLeft}px`;
+    dragState.panel.style.top = `${dragState.latestTop}px`;
+    dragState.panel.style.right = "auto";
+    dragState.panel.style.transform = "";
+    dragState.panel.style.animation = "none";
+    dragState.panel.classList.remove("is-dragging");
+    dragStateRef.current = null;
+    setPanelPosition({
+      left: dragState.latestLeft,
+      top: dragState.latestTop,
+    });
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  useEffect(() => {
+    if (!hasCustomPanelPosition) return;
+
+    const keepPanelInBounds = () => {
+      setPanelPosition((current) => {
+        if (!current) return current;
+        const next = constrainPanelPosition(current.left, current.top);
+        return next.left === current.left && next.top === current.top
+          ? current
+          : next;
+      });
+    };
+    const panel = headingRef.current?.closest<HTMLElement>(".inspector-panel");
+    const resizeObserver = new ResizeObserver(keepPanelInBounds);
+    if (panel) resizeObserver.observe(panel);
+    if (panel?.parentElement) resizeObserver.observe(panel.parentElement);
+    window.addEventListener("resize", keepPanelInBounds);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", keepPanelInBounds);
+    };
+  }, [constrainPanelPosition, hasCustomPanelPosition]);
 
   return (
-    <Card className="inspector-panel" color="app-yellow">
-      <div className="inspector-heading">
+    <Card
+      className="inspector-panel"
+      color="app-yellow"
+      style={
+        panelPosition
+          ? {
+              left: panelPosition.left,
+              top: panelPosition.top,
+              right: "auto",
+              animation: "none",
+            }
+          : undefined
+      }
+    >
+      <div
+        ref={headingRef}
+        className="inspector-heading"
+        title="拖动调整面板位置"
+        onPointerDown={startPanelDrag}
+        onPointerMove={movePanel}
+        onPointerUp={stopPanelDrag}
+        onPointerCancel={stopPanelDrag}
+      >
         <div>
           <span className="inspector-kicker">正在编辑</span>
           <strong>贴纸调整</strong>
