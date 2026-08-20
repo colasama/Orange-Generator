@@ -1,3 +1,5 @@
+
+
 # 酸橙味照片生成器
 
 > 目前还是默认的 README，还没来得及修改.jpg
@@ -33,7 +35,7 @@ pnpm font:subset --source /path/to/font.ttf
 ## 已实现
 
 - 上传或拖放 PNG、JPG、WebP、SVG 图片
-- 添加系统预置的 PNG 与 SVG 贴纸
+- 添加系统预置的 PNG、GIF 与 SVG 贴纸
 - 拖动、等比缩放、旋转、复制和删除贴纸
 - 单独调整每张贴纸的饱和度、明度和白平衡
 - 撤销、重做、清空确认和与导入图片相同尺寸的 PNG 导出
