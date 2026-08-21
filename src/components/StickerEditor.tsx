@@ -47,6 +47,7 @@ import {
 import { useHtmlImage } from "../hooks/useHtmlImage";
 import { waitForGifControllers } from "../hooks/useGifCanvas";
 import { GifEncodingSession } from "../gifExport";
+import type { Mp4EncodingSession } from "../mp4Export";
 import { StickerNode } from "./StickerNode";
 
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -58,7 +59,8 @@ const ALLOWED_IMAGE_TYPES = new Set([
 const ALLOWED_STICKER_TYPES = new Set([...ALLOWED_IMAGE_TYPES, "image/gif"]);
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const GIF_EXPORT_FPS = 12;
-const GIF_EXPORT_MAX_DURATION_MS = 6_000;
+const MP4_EXPORT_FPS = 30;
+const ANIMATED_EXPORT_MAX_DURATION_MS = 6_000;
 const GIF_EXPORT_MAX_PIXELS = 1_500_000;
 const RECOLOR_HINT_SESSION_KEY = "orange-generator:recolor-hint-shown";
 const FIRST_RECOLORABLE_STICKER_ID = STICKER_ASSETS.find(
@@ -68,6 +70,8 @@ const FIRST_RECOLORABLE_STICKER_ID = STICKER_ASSETS.find(
 type StickerUpdater = (stickers: PlacedSticker[]) => PlacedSticker[];
 type ToastKind = "success" | "info" | "warning" | "error";
 type MobileAdjustmentSection = "color" | "transform" | "outline" | "shadow";
+type AnimatedExportFormat = "mp4" | "gif";
+type ExportFormat = "png" | AnimatedExportFormat;
 
 interface ToastState {
   kind: ToastKind;
@@ -78,6 +82,8 @@ interface ToastState {
 interface ExportedImage {
   file: File;
   url: string;
+  format: ExportFormat;
+  usesObjectUrl: boolean;
 }
 
 type ExportState =
@@ -1734,6 +1740,8 @@ export function StickerEditor() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [animatedExportFormat, setAnimatedExportFormat] =
+    useState<AnimatedExportFormat>("mp4");
   const [exportState, setExportState] = useState<ExportState>({
     status: "idle",
   });
@@ -1806,6 +1814,14 @@ export function StickerEditor() {
       null,
     [history.stickers, selectedId]
   );
+  const hasAnimatedStickers = useMemo(
+    () => history.stickers.some((sticker) => sticker.format === "GIF"),
+    [history.stickers]
+  );
+  const exportedObjectUrl =
+    exportState.status === "ready" && exportState.image.usesObjectUrl
+      ? exportState.image.url
+      : null;
 
   useEffect(() => {
     return () => {
@@ -1813,6 +1829,13 @@ export function StickerEditor() {
         URL.revokeObjectURL(background.src);
     };
   }, [background]);
+
+  useEffect(
+    () => () => {
+      if (exportedObjectUrl) URL.revokeObjectURL(exportedObjectUrl);
+    },
+    [exportedObjectUrl]
+  );
 
   useEffect(() => {
     if (exportState.status === "idle") return;
@@ -2008,7 +2031,10 @@ export function StickerEditor() {
     const animatedStickerIds = history.stickers
       .filter((sticker) => sticker.format === "GIF")
       .map((sticker) => sticker.instanceId);
-    const isGifExport = animatedStickerIds.length > 0;
+    const isMp4Export =
+      animatedStickerIds.length > 0 && animatedExportFormat === "mp4";
+    const isGifExport =
+      animatedStickerIds.length > 0 && animatedExportFormat === "gif";
     setExportState({ status: "generating" });
     const previousSelection = selectedId;
     setSelectedId(null);
@@ -2024,17 +2050,57 @@ export function StickerEditor() {
         scaleX: stage.scaleX(),
         scaleY: stage.scaleY(),
       };
-      const gifControllers = isGifExport
+      const gifControllers = isGifExport || isMp4Export
         ? await waitForGifControllers(animatedStickerIds)
         : [];
       let encodingSession: GifEncodingSession | null = null;
+      let mp4EncodingSession: Mp4EncodingSession | null = null;
       let blob: Blob;
       try {
         gifControllers.forEach((controller) => controller.pause());
-        stage.size({ width: background.width, height: background.height });
-        stage.scale({ x: 1, y: 1 });
 
-        if (isGifExport) {
+        if (isMp4Export) {
+          const { Mp4EncodingSession: Mp4Session } = await import(
+            "../mp4Export"
+          );
+          mp4EncodingSession = await Mp4Session.create(
+            background.width,
+            background.height,
+            MP4_EXPORT_FPS
+          );
+          stage.size({
+            width: mp4EncodingSession.width,
+            height: mp4EncodingSession.height,
+          });
+          stage.scale({
+            x: mp4EncodingSession.width / background.width,
+            y: mp4EncodingSession.height / background.height,
+          });
+
+          const frameDuration = 1000 / MP4_EXPORT_FPS;
+          const duration = Math.min(
+            ANIMATED_EXPORT_MAX_DURATION_MS,
+            Math.max(...gifControllers.map((controller) => controller.duration))
+          );
+          const frameCount = Math.max(1, Math.ceil(duration / frameDuration));
+
+          for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+            const timeMs = frameIndex * frameDuration;
+            const durationMs = Math.min(frameDuration, duration - timeMs);
+            gifControllers.forEach((controller) => controller.renderAt(timeMs));
+            stage.draw();
+            await mp4EncodingSession.addFrame(
+              stage.toCanvas({ pixelRatio: 1 }),
+              timeMs,
+              durationMs,
+              frameIndex === 0
+            );
+          }
+
+          blob = await mp4EncodingSession.finish();
+        } else if (isGifExport) {
+          stage.size({ width: background.width, height: background.height });
+          stage.scale({ x: 1, y: 1 });
           const pixelRatio = Math.min(
             1,
             Math.sqrt(
@@ -2045,7 +2111,7 @@ export function StickerEditor() {
           const exportHeight = Math.max(1, Math.round(background.height * pixelRatio));
           const frameDelay = Math.round(1000 / GIF_EXPORT_FPS);
           const duration = Math.min(
-            GIF_EXPORT_MAX_DURATION_MS,
+            ANIMATED_EXPORT_MAX_DURATION_MS,
             Math.max(...gifControllers.map((controller) => controller.duration))
           );
           const frameCount = Math.max(1, Math.ceil(duration / frameDelay));
@@ -2054,7 +2120,7 @@ export function StickerEditor() {
           for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
             const timeMs = frameIndex * frameDelay;
             gifControllers.forEach((controller) => controller.renderAt(timeMs));
-            stage.batchDraw();
+            stage.draw();
             const frameCanvas = stage.toCanvas({ pixelRatio });
             const context = frameCanvas.getContext("2d", { willReadFrequently: true });
             if (!context) throw new Error("浏览器无法读取 GIF 合成画布");
@@ -2066,12 +2132,15 @@ export function StickerEditor() {
 
           blob = await encodingSession.finish();
         } else {
-          stage.batchDraw();
+          stage.size({ width: background.width, height: background.height });
+          stage.scale({ x: 1, y: 1 });
+          stage.draw();
           const exportCanvas = stage.toCanvas({ pixelRatio: 1 });
           blob = await canvasToPngBlob(exportCanvas);
         }
       } finally {
         encodingSession?.terminate();
+        await mp4EncodingSession?.cancel();
         stage.size({
           width: previousStage.width,
           height: previousStage.height,
@@ -2083,13 +2152,25 @@ export function StickerEditor() {
       const fileBase = background.name
         .replace(/\.[^.]+$/, "")
         .replace(/[^\w\u4e00-\u9fa5-]+/g, "-");
-      const fileExtension = isGifExport ? "gif" : "png";
-      const mimeType = isGifExport ? "image/gif" : "image/png";
+      const outputFormat: ExportFormat = isMp4Export
+        ? "mp4"
+        : isGifExport
+        ? "gif"
+        : "png";
+      const fileExtension = outputFormat;
+      const mimeType = isMp4Export
+        ? "video/mp4"
+        : isGifExport
+        ? "image/gif"
+        : "image/png";
       const fileName = `${
         fileBase || "安心院小姐的酸橙味照片"
       }-贴纸版.${fileExtension}`;
       const file = new File([blob], fileName, { type: mimeType });
-      const previewUrl = await blobToDataUrl(blob);
+      const usesObjectUrl = isMp4Export;
+      const previewUrl = usesObjectUrl
+        ? URL.createObjectURL(blob)
+        : await blobToDataUrl(blob);
       const remainingDisplayTime =
         MIN_GENERATING_DISPLAY_MS - (performance.now() - generationStartedAt);
       if (remainingDisplayTime > 0) {
@@ -2099,26 +2180,37 @@ export function StickerEditor() {
       }
 
       if (shouldUseMobileSaveFlow()) {
-        // Mobile Safari and some in-app browsers can display a blob URL but
-        // save an empty/gray image from the long-press menu. A self-contained
-        // A data URL keeps the actual bytes available to that save flow.
-        setExportState({ status: "ready", image: { file, url: previewUrl } });
+        // Mobile Safari and some in-app browsers can save an empty/gray image
+        // from a blob URL. Images use a self-contained data URL for long-press
+        // saving; MP4 keeps an object URL and uses share/download actions.
+        setExportState({
+          status: "ready",
+          image: { file, url: previewUrl, format: outputFormat, usesObjectUrl },
+        });
         return;
       }
 
-      const url = URL.createObjectURL(blob);
+      const url = usesObjectUrl ? previewUrl : URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.download = fileName;
       link.href = url;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setExportState({ status: "ready", image: { file, url: previewUrl } });
+      if (!usesObjectUrl)
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportState({
+        status: "ready",
+        image: { file, url: previewUrl, format: outputFormat, usesObjectUrl },
+      });
       showToast(
         "success",
         "已开始下载",
-        isGifExport ? "动态贴纸已合成为循环 GIF" : "正在导出原图尺寸的 PNG",
+        isMp4Export
+          ? "动态贴纸已导出为高画质 MP4"
+          : isGifExport
+          ? "动态贴纸已合成为循环 GIF"
+          : "正在导出原图尺寸的 PNG",
         2500
       );
     } catch (error) {
@@ -2134,14 +2226,14 @@ export function StickerEditor() {
     }
   };
 
-  const exportFormatLabel = history.stickers.some(
-    (sticker) => sticker.format === "GIF"
-  )
-    ? "GIF"
+  const exportFormatLabel = hasAnimatedStickers
+    ? animatedExportFormat.toUpperCase()
     : "PNG";
+  const exportKindLabel = exportFormatLabel === "MP4" ? "视频" : "图片";
 
   const exportedImage =
     exportState.status === "ready" ? exportState.image : null;
+  const exportedMediaIsVideo = exportedImage?.format === "mp4";
   const isSaving = exportState.status === "generating";
   const canShareExportedImage = Boolean(
     exportedImage && canShareFile(exportedImage.file)
@@ -2153,18 +2245,23 @@ export function StickerEditor() {
     try {
       await navigator.share({
         files: [exportedImage.file],
-        title: "保存图片",
+        title: exportedMediaIsVideo ? "保存视频" : "保存图片",
       });
       setExportState({ status: "idle" });
       showToast(
         "success",
-        "图片已交给系统处理",
+        `${exportedMediaIsVideo ? "视频" : "图片"}已交给系统处理`,
         "可在分享面板中保存到相册或文件",
         2800
       );
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
-        showToast("warning", "系统分享没有打开", "请长按图片保存", 3800);
+        showToast(
+          "warning",
+          "系统分享没有打开",
+          exportedMediaIsVideo ? "请使用下载按钮保存视频" : "请长按图片保存",
+          3800
+        );
       }
     } finally {
       setIsSharing(false);
@@ -2387,8 +2484,48 @@ export function StickerEditor() {
         </div>
       </div>
 
-      <div className="bottom-toolbar">
-        <div className="bottom-copy"></div>
+      <div
+        className={`bottom-toolbar${
+          hasAnimatedStickers ? " has-export-formats" : ""
+        }`}
+      >
+        <div
+          className={`bottom-copy${
+            hasAnimatedStickers ? " has-export-formats" : ""
+          }`}
+        >
+          {hasAnimatedStickers && (
+            <div
+              className="export-format-picker"
+              role="group"
+              aria-label="动态作品导出格式"
+            >
+              <span className="export-format-label">导出格式</span>
+              <div className="export-format-options">
+                <button
+                  className={
+                    animatedExportFormat === "mp4" ? "is-active" : undefined
+                  }
+                  type="button"
+                  aria-pressed={animatedExportFormat === "mp4"}
+                  onClick={() => setAnimatedExportFormat("mp4")}
+                >
+                  MP4 高清
+                </button>
+                <button
+                  className={
+                    animatedExportFormat === "gif" ? "is-active" : undefined
+                  }
+                  type="button"
+                  aria-pressed={animatedExportFormat === "gif"}
+                  onClick={() => setAnimatedExportFormat("gif")}
+                >
+                  GIF 兼容
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="bottom-actions">
           <Button
             className="clear-button"
@@ -2405,11 +2542,17 @@ export function StickerEditor() {
             size="large"
             disabled={!background || isSaving}
             aria-busy={isSaving}
-            aria-label="保存图片"
+            aria-label={animatedExportFormat === "mp4" && hasAnimatedStickers ? "保存视频" : "保存图片"}
             icon={<DownloadSimple size="1em" weight="bold" />}
             onClick={() => void saveImage()}
           >
-            <CanvasButtonLabel text="保存图片" />
+            <CanvasButtonLabel
+              text={
+                animatedExportFormat === "mp4" && hasAnimatedStickers
+                  ? "保存视频"
+                  : "保存图片"
+              }
+            />
           </Button>
         </div>
       </div>
@@ -2455,8 +2598,8 @@ export function StickerEditor() {
               aria-modal="true"
               aria-label={
                 exportState.status === "generating"
-                  ? `正在生成 ${exportFormatLabel} 图片`
-                  : `保存 ${exportFormatLabel} 图片`
+                  ? `正在生成 ${exportFormatLabel} ${exportKindLabel}`
+                  : `保存 ${exportFormatLabel} ${exportKindLabel}`
               }
               aria-busy={exportState.status === "generating"}
             >
@@ -2474,7 +2617,9 @@ export function StickerEditor() {
                   <div className="export-generating-copy">
                     <strong>正在生成 {exportFormatLabel}…</strong>
                     <span>
-                      {exportFormatLabel === "GIF"
+                      {exportFormatLabel === "MP4"
+                        ? "正在以高画质逐帧编码，可能需要一些时间"
+                        : exportFormatLabel === "GIF"
                         ? "正在逐帧合成动态贴纸，可能需要几秒"
                         : "图片尺寸较大时可能需要几秒"}
                     </span>
@@ -2485,16 +2630,32 @@ export function StickerEditor() {
               {exportState.status === "ready" && (
                 <>
                   <div className="save-preview-image-wrap">
-                    <img
-                      className="save-preview-image"
-                      src={exportState.image.url}
-                      alt="已生成的成品图片，可长按保存"
-                    />
+                    {exportState.image.format === "mp4" ? (
+                      <video
+                        className="save-preview-image"
+                        src={exportState.image.url}
+                        controls
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        aria-label="已生成的 MP4 视频预览"
+                      />
+                    ) : (
+                      <img
+                        className="save-preview-image"
+                        src={exportState.image.url}
+                        alt="已生成的成品图片，可长按保存"
+                      />
+                    )}
                   </div>
                   <p className="save-preview-instructions">
-                    图片已经生成
+                    {exportState.image.format === "mp4" ? "视频" : "图片"}
+                    已经生成
                     <br />
-                    可以长按图片保存，或使用下面的按钮
+                    {exportState.image.format === "mp4"
+                      ? "可以预览视频，或使用下面的按钮保存"
+                      : "可以长按图片保存，或使用下面的按钮"}
                   </p>
                   <div className="save-preview-actions">
                     {canShareExportedImage && (
@@ -2513,7 +2674,7 @@ export function StickerEditor() {
                       icon={<DownloadSimple size="1em" weight="bold" />}
                       onClick={downloadExportedImage}
                     >
-                      下载图片
+                      下载{exportState.image.format === "mp4" ? "视频" : "图片"}
                     </Button>
                     <Button onClick={() => setExportState({ status: "idle" })}>
                       完成
@@ -2529,7 +2690,7 @@ export function StickerEditor() {
                     weight="fill"
                     aria-hidden="true"
                   />
-                  <strong>图片生成失败</strong>
+                  <strong>{exportKindLabel}生成失败</strong>
                   <p>{exportState.message}</p>
                   <div className="save-preview-actions">
                     <Button
