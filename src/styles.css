@@ -1255,6 +1255,71 @@ input:focus-visible {
   white-space: nowrap;
 }
 
+.bottom-copy.has-export-formats {
+  display: flex;
+  align-items: center;
+}
+
+.export-format-picker {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.export-format-label {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.export-format-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: rgb(255 255 255 / 62%);
+  border: 1px solid rgb(200 112 0 / 18%);
+  border-radius: 999px;
+}
+
+.export-format-options button {
+  min-height: 34px;
+  padding: 6px 12px;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease, box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.export-format-options button:hover:not(.is-active) {
+  color: var(--ink);
+  background: rgb(255 255 255 / 72%);
+}
+
+.export-format-options button.is-active {
+  color: #fff;
+  background: var(--orange);
+  box-shadow: 0 3px 0 var(--orange-deep);
+}
+
+.export-format-options button:active {
+  transform: translateY(1px);
+}
+
+.export-format-options button:focus-visible {
+  outline: 3px solid rgb(23 142 196 / 42%);
+  outline-offset: 2px;
+}
+
 .bottom-actions {
   gap: 10px;
 }
@@ -2452,6 +2517,27 @@ input:focus-visible {
     min-height: 72px;
     padding: 10px;
     box-shadow: 0 -8px 20px rgb(23 54 93 / 10%);
+  }
+
+  .bottom-toolbar.has-export-formats {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .bottom-copy.has-export-formats,
+  .bottom-toolbar.has-export-formats .bottom-actions {
+    justify-content: center;
+  }
+
+  .export-format-options {
+    width: min(100%, 310px);
+  }
+
+  .export-format-options button {
+    min-height: 32px;
+    padding-inline: 10px;
+    font-size: 13px;
   }
 
   .bottom-copy span {
